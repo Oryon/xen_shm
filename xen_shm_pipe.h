@@ -25,7 +25,7 @@ typedef void* xen_shm_pipe_p;
  */
 typedef uint8_t xen_shm_pipe_mod;
 
-#define XEN_SHM_PIPE_MOD_READ 0
+#define XEN_SHM_PIPE_MOD_READ  0
 #define XEN_SHM_PIPE_MOD_WRITE 1
 
 /*
@@ -55,10 +55,10 @@ struct xen_shm_sync {
  * Warning: The Offerer MUST initialize first
  */
 int xen_shm_init_pipe(xen_shm_pipe_p *, /* A pointer to a pipe */
-						uint32_t domain_id, /* The other domain id */
-						struct xen_shm_sync, /* The sync variables */
-						xen_shm_pipe_mod /* The pipe mod (writer or reader) */
-					  );
+                      uint32_t domain_id, /* The other domain id */
+                      struct xen_shm_sync, /* The sync variables */
+                      xen_shm_pipe_mod /* The pipe mod (writer or reader) */
+                     );
 
 
 /*

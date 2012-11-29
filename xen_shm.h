@@ -34,8 +34,8 @@
  * Best practice is to use macro to generate those numbers. It's not done by now.
  */
 
-#define XEN_SHM_IOCTL_INIT_OFFERER		0xf01
-#define XEN_SHM_IOCTL_INIT_RECEIVER 	0xf02
-#define XEN_SHM_IOCTL_WAIT				0xf03
-#define XEN_SHM_IOCTL_SSIG				0xf04
+#define XEN_SHM_IOCTL_INIT_OFFERER    0xf01
+#define XEN_SHM_IOCTL_INIT_RECEIVER   0xf02
+#define XEN_SHM_IOCTL_WAIT            0xf03
+#define XEN_SHM_IOCTL_SSIG            0xf04
 
