@@ -1,9 +1,9 @@
 /*
  * Xen shared memory module headers
- * 
- * Authors: Vincent Brillault <git@lerya.net> 
+ *
+ * Authors: Vincent Brillault <git@lerya.net>
  *          Pierre Pfister    <pierre.pfister@polytechnique.org>
- * 
+ *
  * This file contains the public headers of the Xen
  * shared memory module. It provides the user-space all
  * the needed structures and values to use to xen_shm
@@ -27,7 +27,7 @@
 #define XEN_SHM_ALLOC_ALIGNED_PAGES 16
 
 /* The maximum number of pages the shared-memory module can provide to the user */
-#define XEN_SHM_MAX_SHARED_PAGES (XEN_SHM_ALLOC_ALIGNED_PAGES - 1) 
+#define XEN_SHM_MAX_SHARED_PAGES (XEN_SHM_ALLOC_ALIGNED_PAGES - 1)
 
 /*
  * IOCTL's command numbers and structures

@@ -1,15 +1,15 @@
 /*
  * Xen shared memory pipe headers
- * 
- * Authors: Vincent Brillault <git@lerya.net> 
+ *
+ * Authors: Vincent Brillault <git@lerya.net>
  *          Pierre Pfister    <pierre.pfister@polytechnique.org>
- * 
+ *
  * This file contains the headers of the Xen shared memory pipe
  * tool.
  *
  * It provides a very fast way to transfer data from
- * a virtual machine process to another one (running on 
- * a possibly different virtual machine), when they run 
+ * a virtual machine process to another one (running on
+ * a possibly different virtual machine), when they run
  * on the same XEN Hypervisor.
  *
  */
@@ -20,7 +20,7 @@
  */
 typedef void* xen_shm_pipe_p;
 
-/* 
+/*
  * The pipe mode on this side
  */
 typedef uint8_t xen_shm_pipe_mod;
@@ -28,7 +28,7 @@ typedef uint8_t xen_shm_pipe_mod;
 #define XEN_SHM_PIPE_MOD_READ 0
 #define XEN_SHM_PIPE_MOD_WRITE 1
 
-/* 
+/*
  * The direction convention between writer/reader offerer/receiver
  */
 typedef uint8_t xen_shm_pipe_dir_conv;
@@ -51,7 +51,7 @@ struct xen_shm_sync {
 
 
 /*
- * Init a pipe. Return 0 if ok. A negative value otherwise. 
+ * Init a pipe. Return 0 if ok. A negative value otherwise.
  * Warning: The Offerer MUST initialize first
  */
 int xen_shm_init_pipe(xen_shm_pipe_p *, /* A pointer to a pipe */
