@@ -1,7 +1,7 @@
 /*
  * Xen shared memory pipe headers
  * 
- * Authors: Vincent Brillault <vincent.brillault@polytechnique.org> 
+ * Authors: Vincent Brillault <git@lerya.net> 
  *          Pierre Pfister    <pierre.pfister@polytechnique.org>
  * 
  * This file contains the headers of the Xen shared memory pipe

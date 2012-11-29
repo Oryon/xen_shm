@@ -1,7 +1,7 @@
 /*
  * Xen shared memory module
  *
- * Authors: Vincent Brillault <vincent.brillault@polytechnique.org> 
+ * Authors: Vincent Brillault <git@lerya.net> 
  *          Pierre Pfister    <pierre.pfister@polytechnique.org>
  * 
  * This file contains the code and private headers of the
@@ -15,7 +15,7 @@
 /*
  * Kernel module information (submitted at the end of the file)
  */
-#define MOD_AUTHORS "Vincent Brillault <vincent.brillault@polytechnique.org>, Pierre Pfister <pierre.pfister@polytechnique.org>"
+#define MOD_AUTHORS "Vincent Brillault <git@lerya.net>, Pierre Pfister <pierre.pfister@polytechnique.org>"
 #define MOD_DESC "Xen Shared Memory Module"
 #define MOD_LICENSE "GPL"
 
