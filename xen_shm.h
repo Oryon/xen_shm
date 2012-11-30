@@ -34,8 +34,44 @@
  * Best practice is to use macro to generate those numbers. It's not done by now.
  */
 
+/* 
+ * Init the shared memory as the offerer domain
+ */
 #define XEN_SHM_IOCTL_INIT_OFFERER    0xf01
+struct xen_shm_ioctlarg_offerer {
+    /* In arguments */
+    uint8_t pages_count,
+    domid_t dist_domid,
+    
+    /* Out arguments */
+    grant_ref_t grant,
+}
+
+/* 
+ * Init the shared memory as the receiver domain
+ */
 #define XEN_SHM_IOCTL_INIT_RECEIVER   0xf02
+struct xen_shm_ioctlarg_receiver {
+    /* In arguments */
+    uint8_t pages_count,
+    domid_t dist_domid,
+    grant_ref_t grant,
+    
+    /* Out arguments */
+    
+}
+
+/* 
+ * Blocks until a signal is received through the event channel
+ * Argument is ignored
+ */
 #define XEN_SHM_IOCTL_WAIT            0xf03
+
+
+/* 
+ * Sends a signal through the event channel
+ * Argument is ignored
+ */
 #define XEN_SHM_IOCTL_SSIG            0xf04
+
 
