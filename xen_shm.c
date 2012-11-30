@@ -35,6 +35,13 @@
 #include <asm/page.h>
 
 /*
+ * Fix USHRT_MAX declaration on strange linux
+ */
+#ifndef USHRT_MAX
+# define USHRT_MAX  ((u16)(~0U))
+#endif
+
+/*
  * The public header of this module
  */
 #include "xen_shm.h"
