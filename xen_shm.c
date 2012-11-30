@@ -2,7 +2,7 @@
  * Xen shared memory module
  *
  * Authors: Vincent Brillault <git@lerya.net>
- *          Pierre Pfister    <pierre.pfister@polytechnique.org>
+ *          Pierre Pfister    <oryon@darou.fr>
  *
  * This file contains the code and private headers of the
  * Xen shared memory module. See the headers file for
