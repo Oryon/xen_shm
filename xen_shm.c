@@ -229,7 +229,10 @@ static int xen_shm_mmap(struct file *filp, struct vm_area_struct *vma) {
  */
 static int xen_shm_ioctl(struct inode *inode, struct file *filp, unsigned int cmd, unsigned long arg) {
     
-    int retval = 0;
+    /* The data related to this instance */
+    struct xen_shm_instance_data* instance_data = (struct xen_shm_instance_data*) filp->private_data;
+    
+    int retval;
     
     /* Testing user's pointer */
     int err = 0; 
@@ -256,7 +259,15 @@ static int xen_shm_ioctl(struct inode *inode, struct file *filp, unsigned int cm
             * When multiple pages are alocated, the first page is also used to transfer
             * the grant_ref_t array.
             */
+           struct xen_shm_ioctlarg_offerer karg;
            
+           retval = __get_user(&karg, arg); //Copying from userspace with no check
+           if (retval != 0)
+               break;
+           
+           // TODO: Do the silly stuffs with karg
+           
+           retval = __put_user(&karg, arg); //Copying to userspace with no check
            
            break;
        case XEN_SHM_IOCTL_INIT_RECEIVER:
@@ -264,6 +275,15 @@ static int xen_shm_ioctl(struct inode *inode, struct file *filp, unsigned int cm
             * Used to make the state go from OPENED to RECEIVER.
             * 
             */
+           struct xen_shm_ioctlarg_receiver karg;
+           
+           retval = __get_user(&karg, arg); //Copying from userspace with no check
+           if (retval != 0)
+               break;
+           
+           // TODO: Do the silly stuffs with karg
+           
+           retval = __put_user(&karg, arg); //Copying to userspace with no check
            
            
            break;
@@ -285,7 +305,10 @@ static int xen_shm_ioctl(struct inode *inode, struct file *filp, unsigned int cm
            /*
             * Writes the domain id into the structure
             */
+           struct xen_shm_ioctlarg_getdomid karg;
+           karg.local_domid = instance_data->local_domid; //Get the local_dom_id from the file data
            
+           retval = __put_user(&karg, arg); //Copying in userspace with no check
            
            break;
        default:
@@ -293,9 +316,8 @@ static int xen_shm_ioctl(struct inode *inode, struct file *filp, unsigned int cm
            break;
 
    }
-
     
-	
+    return retval;
 
 
 }
