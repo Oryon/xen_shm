@@ -199,7 +199,10 @@ static int get_domid_hack(void) {
 /*
  * Called when the module is loaded into the kernel
  */
-int __init xen_shm_init() {
+int __init
+xen_shm_init()
+{
+    int res;
     
     /*
      * Check page size with respect to sizeof(struct xen_shm_meta_page_data)
@@ -212,7 +215,6 @@ int __init xen_shm_init() {
 	/*
 	 * Allocate a valid MAJOR number
 	 */
-    int res;
     if (xen_shm_major_number) { //If the major number is defined
         xen_shm_device = MKDEV(xen_shm_major_number, xen_shm_minor_number);
         res = register_chrdev_region(xen_shm_device, 1, "xen_shm");
@@ -247,8 +249,9 @@ int __init xen_shm_init() {
 /*
  * Called when the module is loaded into the kernel
  */
-void __exit xen_shm_cleanup() {
-
+void __exit
+xen_shm_cleanup()
+{
 	/*
 	 * Needs to verify if no shared memory is open ??? (maybe the kernel close them before ?)
 	 */
@@ -264,7 +267,9 @@ void __exit xen_shm_cleanup() {
 /*
  * Called when a user wants to open the device
  */
-static int xen_shm_open(struct inode * inode, struct file * filp) {
+static int
+xen_shm_open(struct inode * inode, struct file * filp)
+{
 
 	/*
 	 * Initialize the filp private data related to this instance.
@@ -295,7 +300,9 @@ static int xen_shm_open(struct inode * inode, struct file * filp) {
  * All the allocated memory must be deallocated.
  * Statefull data must be restored.
  */
-static int xen_shm_release(struct inode * inode, struct file * filp) {
+static int
+xen_shm_release(struct inode * inode, struct file * filp)
+{
     
 	/*
 	 * Warning: Remember the OFFERER grants and ungrant the pages.
@@ -340,7 +347,9 @@ static int xen_shm_release(struct inode * inode, struct file * filp) {
 /*
  * Used to map the shared pages into the user address space.
  */
-static int xen_shm_mmap(struct file *filp, struct vm_area_struct *vma) {
+static int
+xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
+{
 
 	/*
 	 * Test if the memory has been allocated
@@ -353,8 +362,10 @@ static int xen_shm_mmap(struct file *filp, struct vm_area_struct *vma) {
     return 0;
 }
 
-static int __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data, struct xen_shm_ioctlarg_offerer* arg) {
-    
+static int
+__xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
+                             struct xen_shm_ioctlarg_offerer* arg)
+{
     unsigned int order;
     uint32_t tmp_page_count;
     unsigned long alloc;
@@ -418,8 +429,11 @@ static int __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data, stru
     return 0;
 }
 
-static int __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data, struct xen_shm_ioctlarg_receiver* arg) {
-    
+static int
+__xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
+                              struct xen_shm_ioctlarg_receiver* arg)
+{
+
     if (data->state != XEN_SHM_STATE_OPENED) { /* Command is invalid in this state */
         return -ENOTTY;
     }
@@ -433,7 +447,9 @@ static int __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data, str
 /*
  * Used to control an open instance.
  */
-static long xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
+static long
+xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+{
     
     /* The user pointer */
     void __user* arg_p = (void __user*) arg;
