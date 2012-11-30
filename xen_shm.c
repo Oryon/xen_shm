@@ -232,48 +232,70 @@ static int xen_shm_ioctl(struct inode *inode, struct file *filp, unsigned int cm
     int retval = 0;
     
     /* Testing user's pointer */
-    int err = 0, tmp; 
+    int err = 0; 
     
     /* Verifying value */
     if (_IOC_TYPE(cmd) != XEN_SHM_MAGIC_NUMBER) return -ENOTTY;
     //if (_IOC_NR(cmd) > XEN_SHM_IOCTL_MAXNR) return -ENOTTY; //Should be used when IOCTL MAXNR is defined
     
     /* Testing fault */
-    if (_IOC_DIR(cmd) & _IOC_READ)
+    if (_IOC_DIR(cmd) & _IOC_READ) //User wants to read, so kernel must write
         err = !access_ok(VERIFY_WRITE, (void __user *)arg, _IOC_SIZE(cmd));
-    else if (_IOC_DIR(cmd) & _IOC_WRITE) 
+    else if (_IOC_DIR(cmd) & _IOC_WRITE) //User wants to write, so kernel must read
         err = !access_ok(VERIFY_READ, (void __user *)arg, _IOC_SIZE(cmd));
     
     if (err) return -EFAULT;
     
     
-	/*
-	 * XEN_SHM_IOCTL_INIT_OFFERER is used to make the state go from OPENED to OFFERER.
-	 * in_args:
-	 *        domid_t domid : other domain xen id
-	 *        int npages : number of pages
-	 * out_args:
-	 *        grant_ref_t gref : The grant reference of the first page given by Xen
-	 *
-	 * Note the first allocated page is used to transfer the event channel port.
-	 * When multiple pages are alocated, the first page is also used to transfer
-	 * the grant_ref_t array.
-	 */
+   switch (cmd) {
+       case XEN_SHM_IOCTL_INIT_OFFERER:
+           /*
+            * Used to make the state go from OPENED to OFFERER.
+            * 
+            * Note the first allocated page is used to transfer the event channel port.
+            * When multiple pages are alocated, the first page is also used to transfer
+            * the grant_ref_t array.
+            */
+           
+           
+           break;
+       case XEN_SHM_IOCTL_INIT_RECEIVER:
+           /*
+            * Used to make the state go from OPENED to RECEIVER.
+            * 
+            */
+           
+           
+           break;
+       case XEN_SHM_IOCTL_WAIT:
+           /*
+            * Immediatly sends a signal through the signal channel
+            */
+           
+           
+           break;
+       case XEN_SHM_IOCTL_SSIG:
+           /*
+            * Waits until a signal is received through the signal channel
+            */
+           
+           
+           break;
+       case XEN_SHM_IOCTL_GET_DOMID:
+           /*
+            * Writes the domain id into the structure
+            */
+           
+           
+           break;
+       default:
+           return -ENOTTY;
+           break;
 
-	/*
-	 * XEN_SHM_IOCTL_INIT_RECEIVER is used to make the state go from OPENED to RECEIVER.
-	 * in_args:
-	 *        domid_t domid : other domain xen id
-	 *        grant_ref_t gref : The grant reference of the first page given by Xen
-	 */
+   }
 
-	/*
-	 * XEN_SHM_IOCTL_NOTIFY immediatly sends a signal through the signal channel
-	 */
-
-	/*
-	 * XEN_SHM_IOCTL_WAIT waits until a signal is received through the signal channel
-	 */
+    
+	
 
 
 }
