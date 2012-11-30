@@ -23,6 +23,7 @@
 /*
  * Headers for file system implementation
  */
+#include <asm/xen/hypercall.h>
 #include <linux/fs.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -143,6 +144,56 @@ struct xen_shm_meta_page_data {
 
 };
 
+static int get_domid_hack(void) {
+    int retval;
+    /* Structs */
+    struct evtchn_alloc_unbound alloc_unbound = {
+        .dom = DOMID_SELF,
+        .remote_dom = DOMID_SELF
+    };
+    struct evtchn_status status;
+    struct evtchn_close close;
+
+    /* Open a unbound channel */
+    retval = HYPERVISOR_event_channel_op(EVTCHNOP_alloc_unbound, &alloc_unbound);
+    if (retval != 0) {
+        /* Something went wrong */
+        printk(KERN_WARNING "xen_shm: Unable to open an unbound channel (%i)\n", retval);
+        return -EIO;
+    }
+
+    /* Get the channel status */
+    /* Update request */
+    status.dom = DOMID_SELF;
+    status.port = alloc_unbound.port;
+
+    /* Hypervisor call (check return value later)*/
+    retval = HYPERVISOR_event_channel_op(EVTCHNOP_status, &status);
+
+    /* Close the channel */
+    /* Update request */
+    close.port = alloc_unbound.port;
+
+    /* If it doesn't close, we are doomed, but that's life */
+    (void) HYPERVISOR_event_channel_op(EVTCHNOP_close, &close);
+
+    /* Verify that the status returned correctly */
+    if (retval != 0) {
+        /* Something went wrong */
+        printk(KERN_WARNING "xen_shm: Unable to get the status of the unbound channel (%i)\n", retval);
+        return -EIO;
+    }
+
+    /* check the status */
+    if (status.status != EVTCHNSTAT_unbound) {
+        /* Should have been unbound, let's die */
+        printk(KERN_WARNING "xen_shm: Bad status of the unbound channel (%i)\n", status.status);
+        return -EAGAIN;
+    }
+
+    /* Return the domid */
+    return (int) status.u.unbound.dom;
+}
 
 /*
  * Called when the module is loaded into the kernel
@@ -160,12 +211,27 @@ int __init xen_shm_init() {
         res = alloc_chrdev_region(&xen_shm_device,  xen_shm_minor_number, 1, "xen_shm" );
         xen_shm_major_number = MAJOR(xen_shm_device);
     }
-    
+
     if (res < 0) {
         printk(KERN_WARNING "xen_shm: can't get major %d\n", xen_shm_major_number);
         return res;
     }
-    
+
+    if (xen_shm_domid == 0) {
+         /* Let's try to get it by ouselves */
+         res = get_domid_hack();
+         if (res < 0) {
+             printk(KERN_WARNING "xen_shm: can't obtain local domid, try to set it by yourself (%i)\n", res);
+             return res;
+         }
+         if ((unsigned int)res > USHRT_MAX) {
+             printk(KERN_WARNING "xen_shm: Obtained a domid which isn't a ushort, should not be possible (%i)\n", res);
+             return res;
+         }
+         xen_shm_domid = (domid_t) res;
+         printk(KERN_INFO "xen_shm: Obtained domid by myself: %i\n", res);
+    }
+
     return 0;
 }
 
