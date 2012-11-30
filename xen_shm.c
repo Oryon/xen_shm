@@ -165,6 +165,17 @@ static int xen_shm_open(struct inode * inode, struct file * filp) {
 	/*
 	 * Initialize the filp private data related to this instance.
 	 */
+    
+    struct xen_shm_instance_data* instance_date = kmalloc(sizeof(struct xen_shm_instance_data), GFP_KERNEL /* sleeping is ok */);
+    
+    if (instance_date == NULL) {
+        return -ENOMEM;
+    }
+    
+    instance_date->state = XEN_SHM_STATE_OPENED;
+    instance_date->local_domid = 0; //TODO !! Find local domid
+    
+    return 0;
 
 	/*
 	 * Memory is not allocated yet because the size will be specified by the user with an ioctl.
