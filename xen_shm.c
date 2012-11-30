@@ -228,7 +228,25 @@ static int xen_shm_mmap(struct file *filp, struct vm_area_struct *vma) {
  * Used to control an open instance.
  */
 static int xen_shm_ioctl(struct inode *inode, struct file *filp, unsigned int cmd, unsigned long arg) {
-
+    
+    int retval = 0;
+    
+    /* Testing user's pointer */
+    int err = 0, tmp; 
+    
+    /* Verifying value */
+    if (_IOC_TYPE(cmd) != XEN_SHM_MAGIC_NUMBER) return -ENOTTY;
+    //if (_IOC_NR(cmd) > XEN_SHM_IOCTL_MAXNR) return -ENOTTY; //Should be used when IOCTL MAXNR is defined
+    
+    /* Testing fault */
+    if (_IOC_DIR(cmd) & _IOC_READ)
+        err = !access_ok(VERIFY_WRITE, (void __user *)arg, _IOC_SIZE(cmd));
+    else if (_IOC_DIR(cmd) & _IOC_WRITE) 
+        err = !access_ok(VERIFY_READ, (void __user *)arg, _IOC_SIZE(cmd));
+    
+    if (err) return -EFAULT;
+    
+    
 	/*
 	 * XEN_SHM_IOCTL_INIT_OFFERER is used to make the state go from OPENED to OFFERER.
 	 * in_args:
