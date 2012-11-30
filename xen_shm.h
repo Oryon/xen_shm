@@ -18,6 +18,10 @@
  *
  */
 
+#include <linux/ioctl.h>
+
+
+
 /*
  * General configuration
  */
@@ -29,15 +33,22 @@
 /* The maximum number of pages the shared-memory module can provide to the user */
 #define XEN_SHM_MAX_SHARED_PAGES (XEN_SHM_ALLOC_ALIGNED_PAGES - 1)
 
+
+
+
+
 /*
  * IOCTL's command numbers and structures
- * Best practice is to use macro to generate those numbers. It's not done by now.
+ * A Magic number is defined and used. Using those Macros reduces the probability 
+ * of collisions and provides information to check the user's argument pointer
  */
+
+#define XEN_SHM_MAGIC_NUMBER 83 // 8 bit int
 
 /* 
  * Init the shared memory as the offerer domain
  */
-#define XEN_SHM_IOCTL_INIT_OFFERER    0xf01
+#define XEN_SHM_IOCTL_INIT_OFFERER    _IOWR(XEN_SHM_MAGIC_NUMBER, 1, struct xen_shm_ioctlarg_offerer )
 struct xen_shm_ioctlarg_offerer {
     /* In arguments */
     uint8_t pages_count,
@@ -50,7 +61,7 @@ struct xen_shm_ioctlarg_offerer {
 /* 
  * Init the shared memory as the receiver domain
  */
-#define XEN_SHM_IOCTL_INIT_RECEIVER   0xf02
+#define XEN_SHM_IOCTL_INIT_RECEIVER   _IOWR(XEN_SHM_MAGIC_NUMBER, 2, struct xen_shm_ioctlarg_receiver )
 struct xen_shm_ioctlarg_receiver {
     /* In arguments */
     uint8_t pages_count,
@@ -65,20 +76,20 @@ struct xen_shm_ioctlarg_receiver {
  * Blocks until a signal is received through the event channel
  * Argument is ignored
  */
-#define XEN_SHM_IOCTL_WAIT            0xf03
+#define XEN_SHM_IOCTL_WAIT            _IO(XEN_SHM_MAGIC_NUMBER, 3)
 
 
 /* 
  * Sends a signal through the event channel
  * Argument is ignored
  */
-#define XEN_SHM_IOCTL_SSIG            0xf04
+#define XEN_SHM_IOCTL_SSIG            _IO(XEN_SHM_MAGIC_NUMBER, 4)
 
 
 /* 
  * Get the machine's domain id
  */
-#define XEN_SHM_IOCTL_GET_DOMID       0xf05
+#define XEN_SHM_IOCTL_GET_DOMID       _IOR(XEN_SHM_MAGIC_NUMBER, 5, struct xen_shm_ioctlarg_getdomid )
 struct xen_shm_ioctlarg_getdomid {
     /* In arguments */
     
