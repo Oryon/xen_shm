@@ -84,8 +84,8 @@ struct xen_shm_instance_data {
 	uint64_t pages_phys_addr, //The physical addresses of the allocated pages
 
 	/* Xen grant_table data */
-	domid_t offerer_domid_t,  //The domain id of the offerer
-	domid_t receiver_domid_t, //The domain id of the receiver
+	domid_t local_domid,    //The local domain id
+	domid_t distant_domid, //The distant domain id
 
 	grant_handle_t[XEN_SHM_ALLOC_ALIGNED_PAGES] grant_map_handles, //For the RECEIVER only. Contains an array with all the grant handles
 
