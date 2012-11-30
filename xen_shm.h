@@ -22,8 +22,7 @@
 #define __XEN_SHM_H__
 
 #include <linux/ioctl.h>
-#include <xen/interface/grant_table.h>
-
+#include <xen/grant_table.h>
 
 
 /*
