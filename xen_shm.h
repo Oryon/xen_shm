@@ -75,3 +75,16 @@ struct xen_shm_ioctlarg_receiver {
 #define XEN_SHM_IOCTL_SSIG            0xf04
 
 
+/* 
+ * Get the machine's domain id
+ */
+#define XEN_SHM_IOCTL_GET_DOMID       0xf05
+struct xen_shm_ioctlarg_getdomid {
+    /* In arguments */
+    
+    /* Out arguments */
+    domid_t local_domid,
+    
+}
+
+
