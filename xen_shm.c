@@ -315,12 +315,12 @@ xen_shm_cleanup()
 static int
 xen_shm_open(struct inode * inode, struct file * filp)
 {
+    struct xen_shm_instance_data* instance_data;
 
-	/*
-	 * Initialize the filp private data related to this instance.
-	 */
-    
-    struct xen_shm_instance_data* instance_data = kmalloc(sizeof(struct xen_shm_instance_data), GFP_KERNEL /* sleeping is ok */);
+    /*
+     * Initialize the filp private data related to this instance.
+     */
+    instance_data = kmalloc(sizeof(struct xen_shm_instance_data), GFP_KERNEL /* sleeping is ok */);
     
     if (instance_data == NULL) {
         return -ENOMEM;
