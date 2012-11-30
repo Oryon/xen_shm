@@ -30,7 +30,7 @@
 /*
  * The public header of this module
  */
-#include "xen_shm_pipe.h"
+#include "xen_shm.h"
 
 
 /*
