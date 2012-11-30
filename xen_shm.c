@@ -682,78 +682,78 @@ xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     if (err) return -EFAULT;
 
 
-   switch (cmd) {
-       case XEN_SHM_IOCTL_INIT_OFFERER:
-           /*
-            * Used to make the state go from OPENED to OFFERER.
-            *
-            * Note the first allocated page is used to transfer the event channel port.
-            * When multiple pages are alocated, the first page is also used to transfer
-            * the grant_ref_t array.
-            */
-           retval = copy_from_user(&offerer_karg, arg_p, sizeof(struct xen_shm_ioctlarg_offerer)); //Copying from userspace
-           if (retval != 0)
-               return -EFAULT;
+    switch (cmd) {
+        case XEN_SHM_IOCTL_INIT_OFFERER:
+            /*
+             * Used to make the state go from OPENED to OFFERER.
+             *
+             * Note the first allocated page is used to transfer the event channel port.
+             * When multiple pages are alocated, the first page is also used to transfer
+             * the grant_ref_t array.
+             */
+            retval = copy_from_user(&offerer_karg, arg_p, sizeof(struct xen_shm_ioctlarg_offerer)); //Copying from userspace
+            if (retval != 0)
+                return -EFAULT;
 
-           retval = __xen_shm_ioctl_init_offerer(instance_data, &offerer_karg);
-           if (retval != 0)
-               return retval;
+            retval = __xen_shm_ioctl_init_offerer(instance_data, &offerer_karg);
+            if (retval != 0)
+                return retval;
 
-           retval = copy_to_user(arg_p, &offerer_karg, sizeof(struct xen_shm_ioctlarg_offerer)); //Copying to userspace
-           if (retval != 0)
-               return -EFAULT;
+            retval = copy_to_user(arg_p, &offerer_karg, sizeof(struct xen_shm_ioctlarg_offerer)); //Copying to userspace
+            if (retval != 0)
+                return -EFAULT;
 
-           break;
-       case XEN_SHM_IOCTL_INIT_RECEIVER:
-           /*
-            * Used to make the state go from OPENED to RECEIVER.
-            *
-            */
-           retval = copy_from_user(&receiver_karg, arg_p, sizeof(struct xen_shm_ioctlarg_receiver)); //Copying from userspace
-           if (retval != 0)
-               return -EFAULT;
+            break;
+        case XEN_SHM_IOCTL_INIT_RECEIVER:
+            /*
+             * Used to make the state go from OPENED to RECEIVER.
+             *
+             */
+            retval = copy_from_user(&receiver_karg, arg_p, sizeof(struct xen_shm_ioctlarg_receiver)); //Copying from userspace
+            if (retval != 0)
+                return -EFAULT;
 
-           retval = __xen_shm_ioctl_init_receiver(instance_data, &receiver_karg);
-           if (retval != 0)
-               return retval;
+            retval = __xen_shm_ioctl_init_receiver(instance_data, &receiver_karg);
+            if (retval != 0)
+                return retval;
 
-           retval = copy_to_user(arg_p, &receiver_karg, sizeof(struct xen_shm_ioctlarg_receiver)); //Copying to userspace
-           if (retval != 0)
-               return -EFAULT;
+            retval = copy_to_user(arg_p, &receiver_karg, sizeof(struct xen_shm_ioctlarg_receiver)); //Copying to userspace
+            if (retval != 0)
+                return -EFAULT;
 
-           break;
-       case XEN_SHM_IOCTL_WAIT:
-           /*
-            * Immediatly sends a signal through the signal channel
-            */
+            break;
+        case XEN_SHM_IOCTL_WAIT:
+            /*
+             * Immediatly sends a signal through the signal channel
+             */
 
-           //TODO
+            //TODO
 
-           break;
-       case XEN_SHM_IOCTL_SSIG:
-           /*
-            * Waits until a signal is received through the signal channel
-            */
+            break;
+        case XEN_SHM_IOCTL_SSIG:
+            /*
+             * Waits until a signal is received through the signal channel
+             */
 
-           //TODO
+            //TODO
 
-           break;
-       case XEN_SHM_IOCTL_GET_DOMID:
-           /*
-            * Writes the domain id into the structure
-            */
-           getdomid_karg.local_domid = instance_data->local_domid; //Get the local_dom_id from the file data
+            break;
+        case XEN_SHM_IOCTL_GET_DOMID:
+            /*
+             * Writes the domain id into the structure
+             */
+            getdomid_karg.local_domid = instance_data->local_domid; //Get the local_dom_id from the file data
 
-           retval = copy_to_user(arg_p, &getdomid_karg, sizeof(struct xen_shm_ioctlarg_getdomid)); //Copying to userspace
-           if (retval != 0)
-               return -EFAULT;
+            retval = copy_to_user(arg_p, &getdomid_karg, sizeof(struct xen_shm_ioctlarg_getdomid)); //Copying to userspace
+            if (retval != 0)
+                return -EFAULT;
 
-           break;
-       default:
-           return -ENOTTY;
-           break;
+            break;
+        default:
+            return -ENOTTY;
+            break;
 
-   }
+    }
 
     return 0;
 
