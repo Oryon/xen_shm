@@ -24,6 +24,7 @@
  * Headers for file system implementation
  */
 #include <asm/xen/hypercall.h>
+#include <linux/cdev.h>
 #include <linux/fs.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -80,6 +81,8 @@ static domid_t xen_shm_domid = 0; //Must only be used in open Use instance_data 
 static int xen_shm_major_number = XEN_SHM_MAJOR_NUMBER;
 static int xen_shm_minor_number = 0;
 static dev_t xen_shm_device = 0;
+static struct cdev xen_shm_cdev;
+#define XEN_SHM_DEV_COUNT 1
 
 /*
  * Module parameters
@@ -104,7 +107,8 @@ const struct file_operations xen_shm_file_ops = {
 	.unlocked_ioctl = xen_shm_ioctl,
 	.open = xen_shm_open,
 	.release = xen_shm_release,
-	.mmap = xen_shm_mmap
+	.mmap = xen_shm_mmap,
+	.owner = THIS_MODULE,
 };
 
 /*
@@ -236,22 +240,6 @@ xen_shm_init()
         printk(KERN_WARNING "xen_shm: Cannot initiate gnttab (%d)\n", res);
         return res;
     }
-    
-	/*
-	 * Allocate a valid MAJOR number
-	 */
-    if (xen_shm_major_number) { //If the major number is defined
-        xen_shm_device = MKDEV(xen_shm_major_number, xen_shm_minor_number);
-        res = register_chrdev_region(xen_shm_device, 1, "xen_shm");
-    } else { //If it is not defined, dynamic allocation
-        res = alloc_chrdev_region(&xen_shm_device,  xen_shm_minor_number, 1, "xen_shm" );
-        xen_shm_major_number = MAJOR(xen_shm_device);
-    }
-
-    if (res < 0) {
-        printk(KERN_WARNING "xen_shm: can't get major %d\n", xen_shm_major_number);
-        return res;
-    }
 
     if (xen_shm_domid == 0) {
          /* Let's try to get it by ouselves */
@@ -268,6 +256,34 @@ xen_shm_init()
          printk(KERN_INFO "xen_shm: Obtained domid by myself: %i\n", res);
     }
 
+    /*
+     * Allocate a valid MAJOR number
+     */
+    if (xen_shm_major_number) { //If the major number is defined
+        xen_shm_device = MKDEV(xen_shm_major_number, xen_shm_minor_number);
+        res = register_chrdev_region(xen_shm_device, 1, "xen_shm");
+    } else { //If it is not defined, dynamic allocation
+        res = alloc_chrdev_region(&xen_shm_device,  xen_shm_minor_number, 1, "xen_shm" );
+        xen_shm_major_number = MAJOR(xen_shm_device);
+    }
+
+    if (res < 0) {
+        printk(KERN_WARNING "xen_shm: can't get major %d\n", xen_shm_major_number);
+        return res;
+    }
+
+    /*
+     * Create cdev
+     */
+    cdev_init(&xen_shm_cdev, &xen_shm_file_ops);
+    res = cdev_add(&xen_shm_cdev, xen_shm_device, XEN_SHM_DEV_COUNT);
+
+    if (res < 0) {
+        printk(KERN_WARNING "xen_shm: Unable to create cdev: %i\n", res);
+        unregister_chrdev_region(xen_shm_device, 1);
+        return res;
+    }
+
     return 0;
 }
 
@@ -281,10 +297,14 @@ xen_shm_cleanup()
 	 * Needs to verify if no shared memory is open ??? (maybe the kernel close them before ?)
 	 */
 
+    /*
+     * Remove cdev
+     */
+    cdev_del(&xen_shm_cdev);
 
-	/*
-	 * Unallocate the MAJOR number
-	 */
+    /*
+     * Unallocate the MAJOR number
+     */
     unregister_chrdev_region(xen_shm_device, 1);
 
 }
