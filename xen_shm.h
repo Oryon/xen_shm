@@ -43,13 +43,13 @@
 
 /*
  * IOCTL's command numbers and structures
- * A Magic number is defined and used. Using those Macros reduces the probability 
+ * A Magic number is defined and used. Using those Macros reduces the probability
  * of collisions and provides information to check the user's argument pointer
  */
 
 #define XEN_SHM_MAGIC_NUMBER 83 // 8 bit int
 
-/* 
+/*
  * Init the shared memory as the offerer domain
  */
 #define XEN_SHM_IOCTL_INIT_OFFERER    _IOWR(XEN_SHM_MAGIC_NUMBER, 1, struct xen_shm_ioctlarg_offerer )
@@ -57,12 +57,12 @@ struct xen_shm_ioctlarg_offerer {
     /* In arguments */
     uint8_t pages_count;
     domid_t dist_domid;
-   
+
     /* Out arguments */
     grant_ref_t grant;
 };
 
-/* 
+/*
  * Init the shared memory as the receiver domain
  */
 #define XEN_SHM_IOCTL_INIT_RECEIVER   _IOWR(XEN_SHM_MAGIC_NUMBER, 2, struct xen_shm_ioctlarg_receiver )
@@ -71,35 +71,35 @@ struct xen_shm_ioctlarg_receiver {
     uint8_t pages_count;
     domid_t dist_domid;
     grant_ref_t grant;
-    
+
     /* Out arguments */
-    
+
 };
 
-/* 
+/*
  * Blocks until a signal is received through the event channel
  * Argument is ignored
  */
 #define XEN_SHM_IOCTL_WAIT            _IO(XEN_SHM_MAGIC_NUMBER, 3)
 
 
-/* 
+/*
  * Sends a signal through the event channel
  * Argument is ignored
  */
 #define XEN_SHM_IOCTL_SSIG            _IO(XEN_SHM_MAGIC_NUMBER, 4)
 
 
-/* 
+/*
  * Get the machine's domain id
  */
 #define XEN_SHM_IOCTL_GET_DOMID       _IOR(XEN_SHM_MAGIC_NUMBER, 5, struct xen_shm_ioctlarg_getdomid )
 struct xen_shm_ioctlarg_getdomid {
     /* In arguments */
-    
+
     /* Out arguments */
     domid_t local_domid;
-    
+
 };
 
 #endif

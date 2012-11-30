@@ -77,7 +77,7 @@ void xen_shm_cleanup(void);
  * Global values
  */
 
-static domid_t xen_shm_domid = 0; //Must only be used in open Use instance_data to get it otherwise. 
+static domid_t xen_shm_domid = 0; //Must only be used in open Use instance_data to get it otherwise.
 static int xen_shm_major_number = XEN_SHM_MAJOR_NUMBER;
 static int xen_shm_minor_number = 0;
 static dev_t xen_shm_device = 0;
@@ -104,11 +104,11 @@ static long xen_shm_ioctl(struct file *, unsigned int, unsigned long);
  * Defines the device file operations
  */
 const struct file_operations xen_shm_file_ops = {
-	.unlocked_ioctl = xen_shm_ioctl,
-	.open = xen_shm_open,
-	.release = xen_shm_release,
-	.mmap = xen_shm_mmap,
-	.owner = THIS_MODULE,
+    .unlocked_ioctl = xen_shm_ioctl,
+    .open = xen_shm_open,
+    .release = xen_shm_release,
+    .mmap = xen_shm_mmap,
+    .owner = THIS_MODULE,
 };
 
 /*
@@ -117,24 +117,24 @@ const struct file_operations xen_shm_file_ops = {
  * have to be kept in order to "close later" in the case of a blocking offerer close.
  */
 struct xen_shm_instance_data {
-	xen_shm_state_t state; //The state of this instance
+    xen_shm_state_t state; //The state of this instance
 
-    
-	/* Pages info */
-	uint8_t pages_count; //The total number of consecutive allocated pages (with the header page)
+
+    /* Pages info */
+    uint8_t pages_count; //The total number of consecutive allocated pages (with the header page)
     unsigned int alloc_order;  //Saved value of 'order'. Is used when freeing the pages
-	unsigned long shared_memory; //The kernel addresses of the allocated pages (can also be void*)
+    unsigned long shared_memory; //The kernel addresses of the allocated pages (can also be void*)
 
-	/* Xen grant_table data */
-	domid_t local_domid;    //The local domain id
-	domid_t distant_domid; //The distant domain id
+    /* Xen grant_table data */
+    domid_t local_domid;    //The local domain id
+    domid_t distant_domid; //The distant domain id
 
-	grant_handle_t grant_map_handles[XEN_SHM_ALLOC_ALIGNED_PAGES]; //For the RECEIVER only. Contains an array with all the grant handles
+    grant_handle_t grant_map_handles[XEN_SHM_ALLOC_ALIGNED_PAGES]; //For the RECEIVER only. Contains an array with all the grant handles
     grant_ref_t first_page_grant; //For the RECEIVER only. Contains the first page grant ref
-    
-	/* Event channel data */
-	evtchn_port_t local_ec_port; //The allocated event port number
-	evtchn_port_t dist_ec_port; //The allocated event port number
+
+    /* Event channel data */
+    evtchn_port_t local_ec_port; //The allocated event port number
+    evtchn_port_t dist_ec_port; //The allocated event port number
 
 };
 
@@ -142,24 +142,24 @@ struct xen_shm_instance_data {
  * The first page is used to share meta-data in a more efficient way
  */
 struct xen_shm_meta_page_data {
-    
-    xen_shm_meta_page_state offerer_state;  
-    xen_shm_meta_page_state receiver_state; 
-    
-	uint8_t pages_count; //The number of shared pages, with the header-page. The offerer writes it and the receiver must check it agrees with what he wants
+
+    xen_shm_meta_page_state offerer_state;
+    xen_shm_meta_page_state receiver_state;
+
+    uint8_t pages_count; //The number of shared pages, with the header-page. The offerer writes it and the receiver must check it agrees with what he wants
 
 
-	/*
-	 * Informations about the event channel
-	 */
-	evtchn_port_t offerer_ec_port; //Offerer's event channel port
+    /*
+     * Informations about the event channel
+     */
+    evtchn_port_t offerer_ec_port; //Offerer's event channel port
 
 
-	/*
-	 * An array containing 'pages_count' grant referances.
-	 * The first needs to be sent to the receiver, but they are all written here.
-	 */
-	grant_ref_t grant_refs[XEN_SHM_ALLOC_ALIGNED_PAGES];
+    /*
+     * An array containing 'pages_count' grant referances.
+     * The first needs to be sent to the receiver, but they are all written here.
+     */
+    grant_ref_t grant_refs[XEN_SHM_ALLOC_ALIGNED_PAGES];
 
 
 
@@ -223,15 +223,15 @@ int __init
 xen_shm_init()
 {
     int res;
-    
+
     /*
      * Check page size with respect to sizeof(struct xen_shm_meta_page_data)
      */
     if (sizeof(struct xen_shm_meta_page_data) > PAGE_SIZE) {
         printk(KERN_WARNING "xen_shm: xen_shm_meta_page_data is larger than a single page - So it can't work ! ");
-        return -EFBIG; 
+        return -EFBIG;
     }
-    
+
     /*
      * Init gnttab
      */
@@ -293,9 +293,9 @@ xen_shm_init()
 void __exit
 xen_shm_cleanup()
 {
-	/*
-	 * Needs to verify if no shared memory is open ??? (maybe the kernel close them before ?)
-	 */
+    /*
+     * Needs to verify if no shared memory is open ??? (maybe the kernel close them before ?)
+     */
 
     /*
      * Remove cdev
@@ -321,22 +321,22 @@ xen_shm_open(struct inode * inode, struct file * filp)
      * Initialize the filp private data related to this instance.
      */
     instance_data = kmalloc(sizeof(struct xen_shm_instance_data), GFP_KERNEL /* sleeping is ok */);
-    
+
     if (instance_data == NULL) {
         return -ENOMEM;
     }
-    
+
     instance_data->state = XEN_SHM_STATE_OPENED;
     instance_data->local_domid = xen_shm_domid;
-    
+
     filp->private_data = (void *) instance_data;
-    
+
     return 0;
 
-	/*
-	 * Memory is not allocated yet because the size will be specified by the user with an ioctl.
-	 * So this method doesn't do so much.
-	 */
+    /*
+     * Memory is not allocated yet because the size will be specified by the user with an ioctl.
+     * So this method doesn't do so much.
+     */
 
 }
 
@@ -348,45 +348,45 @@ xen_shm_open(struct inode * inode, struct file * filp)
 static int
 xen_shm_release(struct inode * inode, struct file * filp)
 {
-    
-	/*
-	 * Warning: Remember the OFFERER grants and ungrant the pages.
-	 *          The RECEIVER map and unmap the pages.
-	 *          BUT the OFFERER -must not- ungrant the pages before the RECEIVER unmaped them.
-	 *
-	 *          Xen functions to ungrant can be used when someone still map them, but the memory (obtained with kmalloc) cannot
-	 *          be freed because a new allocation of the same physical adresses would create troubles.
-	 *          void gnttab_end_foreign_access(grant_ref_t ref, int readonly, unsigned long page); maybe solve the problem ? --> Not implemented yet !?!!! (see sources)
-	 *			Maybe we should use the first page for information purposes ? (like using a value to know if the kmalloc can be freed)
-	 */
-    
+
+    /*
+     * Warning: Remember the OFFERER grants and ungrant the pages.
+     *          The RECEIVER map and unmap the pages.
+     *          BUT the OFFERER -must not- ungrant the pages before the RECEIVER unmaped them.
+     *
+     *          Xen functions to ungrant can be used when someone still map them, but the memory (obtained with kmalloc) cannot
+     *          be freed because a new allocation of the same physical adresses would create troubles.
+     *          void gnttab_end_foreign_access(grant_ref_t ref, int readonly, unsigned long page); maybe solve the problem ? --> Not implemented yet !?!!! (see sources)
+     *            Maybe we should use the first page for information purposes ? (like using a value to know if the kmalloc can be freed)
+     */
+
     struct xen_shm_instance_data* data = (struct xen_shm_instance_data*) filp->private_data;
-    
-	/*
-	 * Mapped user memory needs to be unmapped
-	 */
 
-	/*
-	 * Xen grant table state must be restored (unmap on receiver side and end grant on offerer side)
-	 */
+    /*
+     * Mapped user memory needs to be unmapped
+     */
 
-	/*
-	 * Event channel must be closed
-	 */
+    /*
+     * Xen grant table state must be restored (unmap on receiver side and end grant on offerer side)
+     */
 
-	/*
-	 * Allocated memory must be freed
-	 */
+    /*
+     * Event channel must be closed
+     */
+
+    /*
+     * Allocated memory must be freed
+     */
     if (data->state != XEN_SHM_STATE_OPENED) {
         free_pages(data->shared_memory, data->alloc_order); //TODO: Must only be done when other side ok
     }
-    
-    
-    
-    
+
+
+
+
     kfree(filp->private_data);  //TODO: Must only be done when other side ok
 
-    return 0;    
+    return 0;
 }
 
 /*
@@ -396,13 +396,13 @@ static int
 xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
 {
 
-	/*
-	 * Test if the memory has been allocated
-	 */
+    /*
+     * Test if the memory has been allocated
+     */
 
-	/*
-	 * Map the kernel's allocated memory into the user's space
-	 */
+    /*
+     * Map the kernel's allocated memory into the user's space
+     */
 
     return 0;
 }
@@ -411,7 +411,7 @@ static int __xen_shm_allocate_shared_memory(struct xen_shm_instance_data* data) 
     uint32_t tmp_page_count;
     unsigned int order;
     unsigned long alloc;
-    
+
     //Computing the order of allocation size
     order = 0;
     tmp_page_count = data->pages_count;
@@ -422,19 +422,19 @@ static int __xen_shm_allocate_shared_memory(struct xen_shm_instance_data* data) 
     if (tmp_page_count==1<<(order-1)) {
         order--;
     }
-    
+
     //Allocating the pages
     alloc = __get_free_pages(GFP_KERNEL, order);
     if (alloc == 0) {
         printk(KERN_WARNING "xen_shm: could not alloc space for 2^%i pages\n", (int) order);
         return -ENOMEM;
     }
-    
+
     data->alloc_order = order;
-    data->shared_memory = alloc; 
-    
+    data->shared_memory = alloc;
+
     return 0;
-    
+
 }
 
 
@@ -450,43 +450,43 @@ static int
 __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
                              struct xen_shm_ioctlarg_offerer* arg)
 {
-    
+
     int error = 0;
     int page = 0;
     char* page_pointer ;
     struct xen_shm_meta_page_data* meta_page_p;
-    
+
     if (data->state != XEN_SHM_STATE_OPENED) { /* Command is invalid in this state */
         return -ENOTTY;
     }
-    
+
     if (arg->pages_count == 0 || arg->pages_count > XEN_SHM_MAX_SHARED_PAGES) { /* Cannot allocate this amount of pages */
         return -EINVAL;
     }
-    
-    /* 
-     * Completing file data 
+
+    /*
+     * Completing file data
      */
     data->distant_domid = arg->dist_domid;
     data->pages_count = arg->pages_count + 1;
-    
-    /* 
-     * Allocating memory 
+
+    /*
+     * Allocating memory
      */
     error = __xen_shm_allocate_shared_memory(data);
     if (error < 0) {
         return error;
     }
-    
-    
+
+
     /* Initialize header page */
     meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
     meta_page_p->offerer_state = XEN_SHM_META_PAGE_STATE_NONE;
     meta_page_p->receiver_state = XEN_SHM_META_PAGE_STATE_NONE;
-    
+
     meta_page_p->pages_count = data->pages_count;
-    
-    
+
+
     /* Grant mapping and fill header page */
     page_pointer = (char*) data->shared_memory;
     for (page=0; page < data->pages_count; page++) {
@@ -494,37 +494,37 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
         if (meta_page_p->grant_refs[page] < 0) { //In case of error
             error = meta_page_p->grant_refs[page];
             printk(KERN_WARNING "xen_shm: could not grant %ith page (%i)\n",page, (int) meta_page_p->grant_refs[page]);
-            goto undo_grant; 
+            goto undo_grant;
         }
-        
+
         page_pointer += PAGE_SIZE; //Go to next page
     }
-    
-    
+
+
     /* Open event channel and connect it to handler */
-    
-    
+
+
     //TODO
-    
-    
-    
-    
+
+
+
+
     /* If OK, states are changed*/
     data->state = XEN_SHM_STATE_OFFERER;
     meta_page_p->offerer_state = XEN_SHM_META_PAGE_STATE_OPENED;
-    
+
     return 0;
-    
-    
+
+
 undo_grant:
     page--;
     for (; page>=0; page--) {
         gnttab_end_foreign_access_ref(meta_page_p->grant_refs[page] , 0);
     }
-    
+
 //undo_alloc:
     __xen_shm_free_shared_memory(data);
-    
+
     return error;
 }
 
@@ -532,48 +532,48 @@ static int
 __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
                               struct xen_shm_ioctlarg_receiver* arg)
 {
-    
+
 
     int error = 0;
     struct gnttab_map_grant_ref grant_op;
     struct gnttab_unmap_grant_ref unmap_op;
     int page = 0;
-    
+
     char* page_pointer ;
     struct xen_shm_meta_page_data* meta_page_p;
-    
-    
+
+
     if (data->state != XEN_SHM_STATE_OPENED) { /* Command is invalid in this state */
         return -ENOTTY;
     }
-    
+
     if (arg->pages_count == 0 || arg->pages_count > XEN_SHM_MAX_SHARED_PAGES) { /* Cannot allocate this amount of pages */
         return -EINVAL;
     }
-    
-    /* 
-     * Completing file data 
+
+    /*
+     * Completing file data
      */
     data->distant_domid = arg->dist_domid;
     data->first_page_grant = arg->grant;
-    
-    
-    /* 
-     * Allocating memory 
+
+
+    /*
+     * Allocating memory
      */
     error = __xen_shm_allocate_shared_memory(data);
     if (error != 0) {
         return error;
     }
-    
-    
-    
+
+
+
     /*
      * Finding the first page
      */
     page = 0;
     page_pointer = (char*) data->shared_memory;
-    
+
     /* Fill-up the ops data structure with all the necessary parameters */
     gnttab_set_map_op(&grant_op, (unsigned long) page_pointer , GNTMAP_host_map, data->first_page_grant, data->distant_domid);
 
@@ -582,52 +582,52 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
         error = -EFAULT;
         goto undo_alloc;
     }
-    
+
     data->grant_map_handles[0] = grant_op.handle;
     page++;
     page_pointer+=PAGE_SIZE;
-    
-    
+
+
     /*
      * Checking compatibility
      */
     meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
-    
-    if (data->pages_count != meta_page_p->pages_count ) { //Not the same number of pages on both sides 
-        error = -EINVAL; 
+
+    if (data->pages_count != meta_page_p->pages_count ) { //Not the same number of pages on both sides
+        error = -EINVAL;
         goto undo_map;
     }
-    
-     
-    
-    
+
+
+
+
     /*
      * Mapping the other pages
      */
     for (page = 1; page < data->pages_count; page++) {
         gnttab_set_map_op(&grant_op, (unsigned long) page_pointer, GNTMAP_host_map, meta_page_p->grant_refs[page], data->distant_domid);
 
-        
+
         if (HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, &grant_op, 1)) {
             printk("[sop_shm_mapper] HYPERVISOR map grant ref failed");
             error = -EFAULT;
             page_pointer+=PAGE_SIZE;
             goto undo_map;
         }
-        
-        
+
+
         page_pointer+=PAGE_SIZE;
     }
-    
+
     /*
      * Connecting the event channel
      */
-    
+
     //TODO
-    
+
     return 0;
-    
-    
+
+
 undo_map:
     page--;
     page_pointer -= PAGE_SIZE;
@@ -635,10 +635,10 @@ undo_map:
         gnttab_set_unmap_op(&unmap_op, (unsigned long) page_pointer, GNTMAP_host_map, data->grant_map_handles[page]);
         HYPERVISOR_grant_table_op(GNTTABOP_unmap_grant_ref, &unmap_op, 1);
     }
-    
+
 undo_alloc:
     free_pages(data->shared_memory, data->alloc_order);
-    
+
     return error;
 }
 
@@ -649,44 +649,44 @@ undo_alloc:
 static long
 xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
-    
+
     /* The user pointer */
     void __user* arg_p = (void __user*) arg;
-    
+
     /* The data related to this instance */
     struct xen_shm_instance_data* instance_data = (struct xen_shm_instance_data*) filp->private_data;
-    
+
     /*
      * Structs for the different switchs
      */
     struct xen_shm_ioctlarg_offerer offerer_karg;
     struct xen_shm_ioctlarg_receiver receiver_karg;
     struct xen_shm_ioctlarg_getdomid getdomid_karg;
-    
+
     /* retval */
     int retval = 0;
-    
+
     /* Testing user's pointer */
-    int err = 0; 
-    
+    int err = 0;
+
     /* Verifying value */
     if (_IOC_TYPE(cmd) != XEN_SHM_MAGIC_NUMBER) return -ENOTTY;
     //if (_IOC_NR(cmd) > XEN_SHM_IOCTL_MAXNR) return -ENOTTY; //Should be used when IOCTL MAXNR is defined
-    
+
     /* Testing fault */
     if (_IOC_DIR(cmd) & _IOC_READ) //User wants to read, so kernel must write
         err = !access_ok(VERIFY_WRITE, arg_p, _IOC_SIZE(cmd));
     else if (_IOC_DIR(cmd) & _IOC_WRITE) //User wants to write, so kernel must read
         err = !access_ok(VERIFY_READ, arg_p, _IOC_SIZE(cmd));
-    
+
     if (err) return -EFAULT;
-    
-    
+
+
    switch (cmd) {
        case XEN_SHM_IOCTL_INIT_OFFERER:
            /*
             * Used to make the state go from OPENED to OFFERER.
-            * 
+            *
             * Note the first allocated page is used to transfer the event channel port.
             * When multiple pages are alocated, the first page is also used to transfer
             * the grant_ref_t array.
@@ -694,67 +694,67 @@ xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
            retval = copy_from_user(&offerer_karg, arg_p, sizeof(struct xen_shm_ioctlarg_offerer)); //Copying from userspace
            if (retval != 0)
                return -EFAULT;
-               
+
            retval = __xen_shm_ioctl_init_offerer(instance_data, &offerer_karg);
            if (retval != 0)
                return retval;
-           
+
            retval = copy_to_user(arg_p, &offerer_karg, sizeof(struct xen_shm_ioctlarg_offerer)); //Copying to userspace
            if (retval != 0)
                return -EFAULT;
-           
+
            break;
        case XEN_SHM_IOCTL_INIT_RECEIVER:
            /*
             * Used to make the state go from OPENED to RECEIVER.
-            * 
+            *
             */
            retval = copy_from_user(&receiver_karg, arg_p, sizeof(struct xen_shm_ioctlarg_receiver)); //Copying from userspace
            if (retval != 0)
                return -EFAULT;
-           
+
            retval = __xen_shm_ioctl_init_receiver(instance_data, &receiver_karg);
            if (retval != 0)
                return retval;
-           
+
            retval = copy_to_user(arg_p, &receiver_karg, sizeof(struct xen_shm_ioctlarg_receiver)); //Copying to userspace
            if (retval != 0)
                return -EFAULT;
-           
+
            break;
        case XEN_SHM_IOCTL_WAIT:
            /*
             * Immediatly sends a signal through the signal channel
             */
-           
+
            //TODO
-           
+
            break;
        case XEN_SHM_IOCTL_SSIG:
            /*
             * Waits until a signal is received through the signal channel
             */
-           
+
            //TODO
-           
+
            break;
        case XEN_SHM_IOCTL_GET_DOMID:
            /*
             * Writes the domain id into the structure
             */
            getdomid_karg.local_domid = instance_data->local_domid; //Get the local_dom_id from the file data
-           
+
            retval = copy_to_user(arg_p, &getdomid_karg, sizeof(struct xen_shm_ioctlarg_getdomid)); //Copying to userspace
            if (retval != 0)
                return -EFAULT;
-           
+
            break;
        default:
            return -ENOTTY;
            break;
 
    }
-    
+
     return 0;
 
 
