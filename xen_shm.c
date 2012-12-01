@@ -32,6 +32,7 @@
 #include <linux/uaccess.h>
 #include <xen/interface/xen.h>
 #include <xen/interface/event_channel.h>
+#include <asm/page.h>
 
 /*
  * The public header of this module
@@ -199,7 +200,15 @@ static int get_domid_hack(void) {
  * Called when the module is loaded into the kernel
  */
 int __init xen_shm_init() {
-
+    
+    /*
+     * Check page size with respect to sizeof(struct xen_shm_meta_page_data)
+     */
+    if (sizeof(struct xen_shm_meta_page_data) > PAGE_SIZE) {
+        printk(KERN_WARNING "xen_shm: xen_shm_meta_page_data is larger than a single page - So it can't work ! ");
+        return -1; //TODO: Retourner une valeur correcte
+    }
+    
 	/*
 	 * Allocate a valid MAJOR number
 	 */
