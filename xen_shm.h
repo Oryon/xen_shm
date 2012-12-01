@@ -33,7 +33,8 @@
 /* The maximum number of pages the shared-memory module can provide to the user */
 #define XEN_SHM_MAX_SHARED_PAGES (XEN_SHM_ALLOC_ALIGNED_PAGES - 1)
 
-
+/* The device major number - 0 for automatic allocation */
+#define XEN_SHM_MAJOR_NUMBER 0
 
 
 
