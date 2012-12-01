@@ -446,7 +446,7 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
         meta_page_p->grant_refs[page] = gnttab_grant_foreign_access(data->distant_domid , virt_to_mfn(page_pointer), 0); //Granting access
         if (meta_page_p->grant_refs[page] < 0) { //In case of error
             error = meta_page_p->grant_refs[page];
-            printk(KERN_WARNING "xen_shm: could not grant %ith page (%i)\n",page, (int) res);
+            printk(KERN_WARNING "xen_shm: could not grant %ith page (%i)\n",page, (int) meta_page_p->grant_refs[page]);
             page--;
             goto undo_grant; 
         }
