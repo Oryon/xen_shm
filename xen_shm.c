@@ -23,6 +23,7 @@
 /*
  * Headers for file system implementation
  */
+#include <linux/fs.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
@@ -77,13 +78,13 @@ MODULE_PARM_DESC(xen_shm_domid, "Local domain id");
 static int xen_shm_open(struct inode *, struct file *);
 static int xen_shm_release(struct inode *, struct file *);
 static int xen_shm_mmap(struct file *filp, struct vm_area_struct *vma);
-static int xen_shm_ioctl(struct inode *, struct file *, unsigned int, unsigned long);
+static long xen_shm_ioctl(struct file *, unsigned int, unsigned long);
 
 /*
  * Defines the device file operations
  */
-struct file_operations xen_shm_file_ops {
-	.ioctl = xen_shm_ioctl,
+const struct file_operations xen_shm_file_ops = {
+	.unlocked_ioctl = xen_shm_ioctl,
 	.open = xen_shm_open,
 	.release = xen_shm_release,
 	.mmap = xen_shm_mmap
@@ -268,7 +269,7 @@ static int xen_shm_mmap(struct file *filp, struct vm_area_struct *vma) {
 /*
  * Used to control an open instance.
  */
-static int xen_shm_ioctl(struct inode *inode, struct file *filp, unsigned int cmd, unsigned long arg) {
+static long xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
     
     /* The data related to this instance */
     struct xen_shm_instance_data* instance_data = (struct xen_shm_instance_data*) filp->private_data;
