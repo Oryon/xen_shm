@@ -269,6 +269,29 @@ static int xen_shm_mmap(struct file *filp, struct vm_area_struct *vma) {
     return 0;
 }
 
+static int __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data, struct xen_shm_ioctlarg_offerer* arg) {
+    
+    if (data->state != XEN_SHM_STATE_OPENED) { /* Command is invalid in this state */
+        return -ENOTTY;
+    }
+    
+    //TODO
+    
+    return 0;
+}
+
+static int __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data, struct xen_shm_ioctlarg_receiver* arg) {
+    
+    if (data->state != XEN_SHM_STATE_OPENED) { /* Command is invalid in this state */
+        return -ENOTTY;
+    }
+    
+    //TODO
+    
+    return 0;
+}
+
+
 /*
  * Used to control an open instance.
  */
@@ -319,8 +342,9 @@ static long xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
            if (retval != 0)
                return -EFAULT;
                
-           
-           // TODO: Do the silly stuffs with karg
+           retval = __xen_shm_ioctl_init_offerer(instance_data, &offerer_karg);
+           if (retval != 0)
+               return retval;
            
            retval = copy_to_user(arg_p, &offerer_karg, sizeof(struct xen_shm_ioctlarg_offerer)); //Copying to userspace
            if (retval != 0)
@@ -336,7 +360,9 @@ static long xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
            if (retval != 0)
                return -EFAULT;
            
-           // TODO: Do the silly stuffs with karg
+           retval = __xen_shm_ioctl_init_receiver(instance_data, &receiver_karg);
+           if (retval != 0)
+               return retval;
            
            retval = copy_to_user(arg_p, &receiver_karg, sizeof(struct xen_shm_ioctlarg_receiver)); //Copying to userspace
            if (retval != 0)
