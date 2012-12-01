@@ -34,6 +34,7 @@
 #include <xen/interface/event_channel.h>
 #include <asm/page.h>
 #include <xen/grant_table.h>
+#include <xen/page.h>
 
 /*
  * Fix USHRT_MAX declaration on strange linux
@@ -386,6 +387,7 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
     int error = 0;
     int page = 0;
     char* page_pointer ;
+    struct xen_shm_meta_page_data* meta_page_p;
     
     if (data->state != XEN_SHM_STATE_OPENED) { /* Command is invalid in this state */
         return -ENOTTY;
@@ -431,7 +433,7 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
     
     
     /* Initialize header page */
-    struct xen_shm_meta_page_data* meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
+    meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
     meta_page_p->offerer_state = XEN_SHM_META_PAGE_STATE_NONE;
     meta_page_p->receiver_state = XEN_SHM_META_PAGE_STATE_NONE;
     
@@ -473,7 +475,7 @@ undo_grant:
         gnttab_end_foreign_access_ref(meta_page_p->grant_refs[page] , 0);
     }
     
-undo_alloc:
+//undo_alloc:
     free_pages(data->shared_memory, data->alloc_order);
     
     return error;
