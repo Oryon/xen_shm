@@ -160,7 +160,7 @@ struct xen_shm_meta_page_data {
 
 };
 
-static int get_domid_hack(void) {
+static int xen_shm_get_domid_hack(void) {
     int retval;
     /* Structs */
     struct evtchn_alloc_unbound alloc_unbound = {
@@ -254,7 +254,7 @@ xen_shm_init()
 
     if (xen_shm_domid == 0) {
          /* Let's try to get it by ouselves */
-         res = get_domid_hack();
+         res = xen_shm_get_domid_hack();
          if (res < 0) {
              printk(KERN_WARNING "xen_shm: can't obtain local domid, try to set it by yourself (%i)\n", res);
              return res;
