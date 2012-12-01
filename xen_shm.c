@@ -274,6 +274,9 @@ static int xen_shm_mmap(struct file *filp, struct vm_area_struct *vma) {
  */
 static long xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
     
+    /* The user pointer */
+    void __user* arg_p = (void __user*) arg;
+    
     /* The data related to this instance */
     struct xen_shm_instance_data* instance_data = (struct xen_shm_instance_data*) filp->private_data;
     
@@ -296,9 +299,9 @@ static long xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
     
     /* Testing fault */
     if (_IOC_DIR(cmd) & _IOC_READ) //User wants to read, so kernel must write
-        err = !access_ok(VERIFY_WRITE, (void __user *)arg, _IOC_SIZE(cmd));
+        err = !access_ok(VERIFY_WRITE, arg_p, _IOC_SIZE(cmd));
     else if (_IOC_DIR(cmd) & _IOC_WRITE) //User wants to write, so kernel must read
-        err = !access_ok(VERIFY_READ, (void __user *)arg, _IOC_SIZE(cmd));
+        err = !access_ok(VERIFY_READ, arg_p, _IOC_SIZE(cmd));
     
     if (err) return -EFAULT;
     
@@ -312,13 +315,13 @@ static long xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
             * When multiple pages are alocated, the first page is also used to transfer
             * the grant_ref_t array.
             */
-           retval = __get_user(&offerer_karg, &arg); //Copying from userspace with no check
+           retval = __get_user(&offerer_karg, arg_p); //Copying from userspace with no check
            if (retval != 0)
                break;
            
            // TODO: Do the silly stuffs with karg
            
-           retval = __put_user(&offerer_karg, &arg); //Copying to userspace with no check
+           retval = __put_user(&offerer_karg, arg_p); //Copying to userspace with no check
            
            break;
        case XEN_SHM_IOCTL_INIT_RECEIVER:
@@ -326,13 +329,13 @@ static long xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
             * Used to make the state go from OPENED to RECEIVER.
             * 
             */
-           retval = __get_user(&reveiver_karg, &arg); //Copying from userspace with no check
+           retval = __get_user(&reveiver_karg, arg_p); //Copying from userspace with no check
            if (retval != 0)
                break;
            
            // TODO: Do the silly stuffs with karg
            
-           retval = __put_user(&reveiver_karg, &arg); //Copying to userspace with no check
+           retval = __put_user(&reveiver_karg, arg_p); //Copying to userspace with no check
            
            
            break;
@@ -358,7 +361,7 @@ static long xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
             */
            getdomid_karg.local_domid = instance_data->local_domid; //Get the local_dom_id from the file data
            
-           retval = __put_user(&getdomid_karg, &arg); //Copying in userspace with no check
+           retval = __put_user(&getdomid_karg, arg_p); //Copying in userspace with no check
            
            break;
        default:
