@@ -99,10 +99,11 @@ const struct file_operations xen_shm_file_ops = {
 struct xen_shm_instance_data {
 	xen_shm_state_t state; //The state of this instance
 
-
+    
 	/* Pages info */
-	uint8_t pages_count; //The total number of consecutive allocated pages
-	uint64_t pages_phys_addr; //The physical addresses of the allocated pages
+	uint8_t pages_count; //The total number of consecutive allocated pages (with the header page)
+    unsigned int alloc_order;  //Saved value of 'order'. Is used when freeing the pages
+	void* shared_memory; //The kernel addresses of the allocated pages
 
 	/* Xen grant_table data */
 	domid_t local_domid;    //The local domain id
@@ -220,7 +221,7 @@ static int xen_shm_open(struct inode * inode, struct file * filp) {
  * Statefull data must be restored.
  */
 static int xen_shm_release(struct inode * inode, struct file * filp) {
-
+    
 	/*
 	 * Warning: Remember the OFFERER grants and ungrant the pages.
 	 *          The RECEIVER map and unmap the pages.
@@ -231,7 +232,9 @@ static int xen_shm_release(struct inode * inode, struct file * filp) {
 	 *          void gnttab_end_foreign_access(grant_ref_t ref, int readonly, unsigned long page); maybe solve the problem ? --> Not implemented yet !?!!! (see sources)
 	 *			Maybe we should use the first page for information purposes ? (like using a value to know if the kmalloc can be freed)
 	 */
-
+    
+    struct xen_shm_instance_data* data = (struct xen_shm_instance_data*) filp->private_data;
+    
 	/*
 	 * Mapped user memory needs to be unmapped
 	 */
@@ -247,8 +250,14 @@ static int xen_shm_release(struct inode * inode, struct file * filp) {
 	/*
 	 * Allocated memory must be freed
 	 */
+    if (data->state != XEN_SHM_STATE_OPENED) {
+        free_pages(data->shared_memory, data->alloc_order); //TODO: Must only be done when other side ok
+    }
     
-    kfree(filp->private_data);
+    
+    
+    
+    kfree(filp->private_data);  //TODO: Must only be done when other side ok
 
     return 0;    
 }
@@ -275,7 +284,57 @@ static int __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data, stru
         return -ENOTTY;
     }
     
+    if (arg->pages_count == 0 || arg->pages_count > XEN_SHM_MAX_SHARED_PAGES) { /* Cannot allocate this amount of pages */
+        return -EINVAL;
+    }
+    
+    /* 
+     * Completing file data 
+     */
+    data->distant_domid = arg->dist_domid;
+    
+    
+    /* 
+     * Allocating memory 
+     */
+    
+    //Computing the order of allocation size
+    unsigned int order = 0;
+    uint32_t tmp_page_count = arg->pages_count + 1;
+    while (tmp_page_count != 0 ) {
+        order++;
+        tmp_page_count = tmp_page_count >> 1;
+    }
+    if (tmp_page_count==1<<(order-1)) {
+        order--;
+    }
+    
+    //Allocating the pages
+    void* alloc = __get_free_pages(GFP_KERNEL, order);
+    if (alloc == NULL)
+        return -ENOMEM;
+    
+    data->alloc_order = order;
+    data->pages_count = tmp_page_count;
+    data->shared_memory = alloc;
+    
+    
+    
+    
+    /* Initialize header page */
     //TODO
+    
+    /* Grant mapping and fill header page */
+    //TODO
+    
+    /* Open event channel and connect it to handler */
+    //TODO
+    
+    //TODO
+    
+    
+    //If OK, the state is set to offerer
+    data->state = XEN_SHM_STATE_OFFERER;   
     
     return 0;
 }
