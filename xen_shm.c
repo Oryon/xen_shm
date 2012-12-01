@@ -612,7 +612,7 @@ undo_map:
     page--;
     page_pointer -= PAGE_SIZE;
     for (; page>=0; page--) {
-        gnttab_set_unmap_op(&unmap_op, virt_to_phys(page_pointer), GNTMAP_host_map, data->grant_map_handles[page]);
+        gnttab_set_unmap_op(&unmap_op, (unsigned long) page_pointer, GNTMAP_host_map, data->grant_map_handles[page]);
         HYPERVISOR_grant_table_op(GNTTABOP_unmap_grant_ref, &unmap_op, 1);
     }
     
