@@ -67,8 +67,9 @@ static dev_t xen_shm_device = 0;
 
 /*
  * Module parameters
+ * As we don't want to define the checkers for domid_t, let's say it's a ushort
  */
-module_param(xen_shm_domid, domid_t, S_IRUSR | S_IRGRP);
+module_param(xen_shm_domid, ushort, S_IRUSR | S_IRGRP);
 MODULE_PARM_DESC(xen_shm_domid, "Local domain id");
 
 
