@@ -418,8 +418,8 @@ static int __xen_shm_allocate_shared_memory(struct xen_shm_instance_data* data) 
 }
 
 
-static int __xen_shm_free_shared_memory(struct xen_shm_instance_data* data) {
-    return free_pages(data->shared_memory, data->alloc_order);
+static void __xen_shm_free_shared_memory(struct xen_shm_instance_data* data) {
+    free_pages(data->shared_memory, data->alloc_order);
 }
 
 
@@ -555,11 +555,8 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     page_pointer = (char*) data->shared_memory;
     
     /* Fill-up the ops data structure with all the necessary parameters */
-    error = gnttab_set_map_op(&grant_op, virt_to_phys(page_pointer), GNTMAP_host_map, data->first_page_grant, data->distant_domid);
-    if (error != 0) {
-        goto undo_alloc;
-    }
-    
+    gnttab_set_map_op(&grant_op, (unsigned long) page_pointer , GNTMAP_host_map, data->first_page_grant, data->distant_domid);
+
     if (HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, &grant_op, 1)) {
         printk("[sop_shm_mapper] HYPERVISOR map grant ref failed");
         error = -EFAULT;
@@ -588,11 +585,8 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
      * Mapping the other pages
      */
     for (page = 1; page < data->pages_count; page++) {
-        error = gnttab_set_map_op(&grant_op, virt_to_phys(page_pointer), GNTMAP_host_map, meta_page_p->grant_refs[page], data->distant_domid);
-        if (error != 0) {
-            page_pointer+=PAGE_SIZE;
-            goto undo_map;
-        }
+        gnttab_set_map_op(&grant_op, (unsigned long) page_pointer, GNTMAP_host_map, meta_page_p->grant_refs[page], data->distant_domid);
+
         
         if (HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, &grant_op, 1)) {
             printk("[sop_shm_mapper] HYPERVISOR map grant ref failed");
@@ -616,7 +610,7 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     
 undo_map:
     page--;
-    page_pointer -= PAGE_SIZE
+    page_pointer -= PAGE_SIZE;
     for (; page>=0; page--) {
         gnttab_set_unmap_op(&unmap_op, virt_to_phys(page_pointer), GNTMAP_host_map, data->grant_map_handles[page]);
         HYPERVISOR_grant_table_op(GNTTABOP_unmap_grant_ref, &unmap_op, 1);
