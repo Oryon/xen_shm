@@ -288,7 +288,7 @@ static long xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
     struct xen_shm_ioctlarg_getdomid getdomid_karg;
     
     /* retval */
-    int retval;
+    int retval = 0;
     
     /* Testing user's pointer */
     int err = 0; 
@@ -376,7 +376,7 @@ static long xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
 
    }
     
-    return retval;
+    return 0;
 
 
 }
