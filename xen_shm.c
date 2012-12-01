@@ -315,13 +315,16 @@ static long xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
             * When multiple pages are alocated, the first page is also used to transfer
             * the grant_ref_t array.
             */
-           retval = __get_user(&offerer_karg, arg_p); //Copying from userspace with no check
+           retval = copy_from_user(&offerer_karg, arg_p, sizeof(struct xen_shm_ioctlarg_offerer)); //Copying from userspace
            if (retval != 0)
-               break;
+               return -EFAULT;
+               
            
            // TODO: Do the silly stuffs with karg
            
-           retval = __put_user(&offerer_karg, arg_p); //Copying to userspace with no check
+           retval = copy_to_user(arg_p, &offerer_karg, sizeof(struct xen_shm_ioctlarg_offerer)); //Copying to userspace
+           if (retval != 0)
+               return -EFAULT;
            
            break;
        case XEN_SHM_IOCTL_INIT_RECEIVER:
@@ -329,14 +332,15 @@ static long xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
             * Used to make the state go from OPENED to RECEIVER.
             * 
             */
-           retval = __get_user(&reveiver_karg, arg_p); //Copying from userspace with no check
+           retval = copy_from_user(&receiver_karg, arg_p, sizeof(struct xen_shm_ioctlarg_receiver)); //Copying from userspace
            if (retval != 0)
-               break;
+               return -EFAULT;
            
            // TODO: Do the silly stuffs with karg
            
-           retval = __put_user(&reveiver_karg, arg_p); //Copying to userspace with no check
-           
+           retval = copy_to_user(arg_p, &receiver_karg, sizeof(struct xen_shm_ioctlarg_receiver)); //Copying to userspace
+           if (retval != 0)
+               return -EFAULT;
            
            break;
        case XEN_SHM_IOCTL_WAIT:
@@ -361,7 +365,9 @@ static long xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
             */
            getdomid_karg.local_domid = instance_data->local_domid; //Get the local_dom_id from the file data
            
-           retval = __put_user(&getdomid_karg, arg_p); //Copying in userspace with no check
+           retval = copy_to_user(arg_p, &getdomid_karg, sizeof(struct xen_shm_ioctlarg_getdomid)); //Copying to userspace
+           if (retval != 0)
+               return -EFAULT;
            
            break;
        default:
