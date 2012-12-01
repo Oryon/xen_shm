@@ -312,13 +312,13 @@ static long xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
             * When multiple pages are alocated, the first page is also used to transfer
             * the grant_ref_t array.
             */
-           retval = __get_user(&offerer_karg, arg); //Copying from userspace with no check
+           retval = __get_user(&offerer_karg, &arg); //Copying from userspace with no check
            if (retval != 0)
                break;
            
            // TODO: Do the silly stuffs with karg
            
-           retval = __put_user(&offerer_karg, arg); //Copying to userspace with no check
+           retval = __put_user(&offerer_karg, &arg); //Copying to userspace with no check
            
            break;
        case XEN_SHM_IOCTL_INIT_RECEIVER:
@@ -326,13 +326,13 @@ static long xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
             * Used to make the state go from OPENED to RECEIVER.
             * 
             */
-           retval = __get_user(&reveiver_karg, arg); //Copying from userspace with no check
+           retval = __get_user(&reveiver_karg, &arg); //Copying from userspace with no check
            if (retval != 0)
                break;
            
            // TODO: Do the silly stuffs with karg
            
-           retval = __put_user(&reveiver_karg, arg); //Copying to userspace with no check
+           retval = __put_user(&reveiver_karg, &arg); //Copying to userspace with no check
            
            
            break;
@@ -358,7 +358,7 @@ static long xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
             */
            getdomid_karg.local_domid = instance_data->local_domid; //Get the local_dom_id from the file data
            
-           retval = __put_user(&getdomid_karg, arg); //Copying in userspace with no check
+           retval = __put_user(&getdomid_karg, &arg); //Copying in userspace with no check
            
            break;
        default:
