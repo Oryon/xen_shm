@@ -190,14 +190,16 @@ static int xen_shm_open(struct inode * inode, struct file * filp) {
 	 * Initialize the filp private data related to this instance.
 	 */
     
-    struct xen_shm_instance_data* instance_date = kmalloc(sizeof(struct xen_shm_instance_data), GFP_KERNEL /* sleeping is ok */);
+    struct xen_shm_instance_data* instance_data = kmalloc(sizeof(struct xen_shm_instance_data), GFP_KERNEL /* sleeping is ok */);
     
-    if (instance_date == NULL) {
+    if (instance_data == NULL) {
         return -ENOMEM;
     }
     
-    instance_date->state = XEN_SHM_STATE_OPENED;
-    instance_date->local_domid = xen_shm_domid;
+    instance_data->state = XEN_SHM_STATE_OPENED;
+    instance_data->local_domid = xen_shm_domid;
+    
+    filp->private_data = (void *) instance_data;
     
     return 0;
 
@@ -241,7 +243,9 @@ static int xen_shm_release(struct inode * inode, struct file * filp) {
 	/*
 	 * Allocated memory must be freed
 	 */
-
+    
+    kfree(filp->private_data);
+    
 }
 
 /*
