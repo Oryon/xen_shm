@@ -15,7 +15,7 @@
 /*
  * Kernel module information (submitted at the end of the file)
  */
-#define MOD_AUTHORS "Vincent Brillault <git@lerya.net>, Pierre Pfister <pierre.pfister@polytechnique.org>"
+#define MOD_AUTHORS "Vincent Brillault <git@lerya.net>, Pierre Pfister <oryon@darou.fr>"
 #define MOD_DESC "Xen Shared Memory Module"
 #define MOD_LICENSE "GPL"
 
@@ -57,10 +57,10 @@ void xen_shm_cleanup(void);
  * Global values
  */
 
-static domid_t xen_shm_domid = 0;
+static domid_t xen_shm_domid = 0; //Must only be used in open Use instance_data to get it otherwise. 
 static int xen_shm_major_number = XEN_SHM_MAJOR_NUMBER;
 static int xen_shmminor_number = 0;
-static dev_t xen_shm_device;
+static dev_t xen_shm_device = 0;
 
 /*
  * Module parameters
@@ -117,9 +117,9 @@ struct xen_shm_instance_data {
  */
 struct xen_shm_meta_page_data {
 	uint8_t offerer_closed, // The offerer signals he wants to unmap the pages. When !=0, nothing should be written anymore and the RECEIVER should close as soon as possible.
-	uint8_t receiver_closed, //The receiver sets this to one just before unmapping the frames. It will not write anything on the frames after it.
-
-	uint8_t pages_count, //The number of shared pages, with the header-page
+	uint8_t receiver_closed, //The receiver sets this to one just after unmapping the frames.
+    
+	uint8_t pages_count, //The number of shared pages, with the header-page. The offerer writes it and the receiver must check it agrees with what he wants
 
 
 	/*
@@ -132,7 +132,7 @@ struct xen_shm_meta_page_data {
 	 * An array containing 'pages_count' grant referances.
 	 * The first needs to be sent to the receiver, but they are all written here.
 	 */
-	grant_ref_t[XEN_SHM_KMALLOC_MAX_ALIGNED_PAGES] grant_refs,
+	grant_ref_t[XEN_SHM_ALLOC_ALIGNED_PAGES] grant_refs,
 
 
 
@@ -331,6 +331,7 @@ static int xen_shm_ioctl(struct inode *inode, struct file *filp, unsigned int cm
             * Immediatly sends a signal through the signal channel
             */
            
+           //TODO
            
            break;
        case XEN_SHM_IOCTL_SSIG:
@@ -338,6 +339,7 @@ static int xen_shm_ioctl(struct inode *inode, struct file *filp, unsigned int cm
             * Waits until a signal is received through the signal channel
             */
            
+           //TODO
            
            break;
        case XEN_SHM_IOCTL_GET_DOMID:
