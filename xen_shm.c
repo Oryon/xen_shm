@@ -227,6 +227,15 @@ xen_shm_init()
         return -EFBIG; 
     }
     
+    /*
+     * Init gnttab
+     */
+    res = gnttab_init();
+    if (res < 0) {
+        printk(KERN_WARNING "xen_shm: Cannot initiate gnttab (%d)\n", res);
+        return res;
+    }
+    
 	/*
 	 * Allocate a valid MAJOR number
 	 */
