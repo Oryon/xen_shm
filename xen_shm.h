@@ -19,7 +19,7 @@
  */
 
 #include <linux/ioctl.h>
-#include <xen/gnttab.h>
+#include <xen/interface/grant_table.h>
 
 
 
