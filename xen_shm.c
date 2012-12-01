@@ -58,6 +58,9 @@ void xen_shm_cleanup(void);
  */
 
 static domid_t xen_shm_domid = 0;
+static int xen_shm_major_number = XEN_SHM_MAJOR_NUMBER;
+static int xen_shmminor_number = 0;
+static dev_t xen_shm_device;
 
 /*
  * Module parameters
@@ -144,11 +147,21 @@ int __init xen_shm_init() {
 	/*
 	 * Allocate a valid MAJOR number
 	 */
-
-	/*
-	 * Create the node (mknod) with the allocated MAJOR number
-	 */
-
+    int res;
+    if (xen_shm_major_number) { //If the major number is defined
+        xen_shm_device = MKDEV(xen_shm_major_number, xen_shm_minor_number);
+        res = register_chrdev_region(xen_shm_device, 1, "xen_shm");
+    } else { //If it is not defined, dynamic allocation
+        res = alloc_chrdev_region(&xen_shm_device,  xen_shm_minor_number, 1, "xen_shm" );
+        xen_shm_major_number = MAJOR(xen_shm_device);
+    }
+    
+    if (res < 0) {
+        printk(KERN_WARNING "xen_shm: can't get major %d\n", scull_major);
+        return res;
+    }
+    
+    return 0;
 }
 
 /*
@@ -157,17 +170,14 @@ int __init xen_shm_init() {
 void __exit xen_shm_cleanup() {
 
 	/*
-	 * Need to verify if no shared memory is open ??? (maybe the kernel close them before ?)
-	 */
-
-	/*
-	 * Delete the device nodes
+	 * Needs to verify if no shared memory is open ??? (maybe the kernel close them before ?)
 	 */
 
 
 	/*
 	 * Unallocate the MAJOR number
 	 */
+    unregister_chrdev_region(xen_shm_device, 1);
 
 }
 
