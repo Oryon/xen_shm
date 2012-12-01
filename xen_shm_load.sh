@@ -1,5 +1,5 @@
 #Load the module and creates the device
-#!/bin/sh
+#!/bin/bash
 
 module="xen_shm"
 device="xen_shm"
@@ -10,9 +10,9 @@ mode="664"
 
 rm -f /dev/${device}
 
-major=$(awk "\\$2==\"$module\" {print \\$1}" /proc/devices)
+major=`awk "\\$2==\"$module\" {print \\$1}" /proc/devices`
 
-mknod /dev/${device}0 c $major 0
+mknod /dev/${device} c $major 0
 
 group="staff"
 grep -q '^staff:' /etc/group || group="wheel"

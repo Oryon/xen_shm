@@ -1,5 +1,5 @@
 #Unload the module and removes the devices
-#!/bin/sh
+#!/bin/bash
 
 module="xen_shm"
 device="xen_shm"
