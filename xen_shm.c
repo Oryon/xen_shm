@@ -224,7 +224,7 @@ xen_shm_init()
      */
     if (sizeof(struct xen_shm_meta_page_data) > PAGE_SIZE) {
         printk(KERN_WARNING "xen_shm: xen_shm_meta_page_data is larger than a single page - So it can't work ! ");
-        return -1; //TODO: Retourner une valeur correcte
+        return -EFBIG; 
     }
     
 	/*
