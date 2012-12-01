@@ -62,7 +62,7 @@ void xen_shm_cleanup(void);
 
 static domid_t xen_shm_domid = 0; //Must only be used in open Use instance_data to get it otherwise. 
 static int xen_shm_major_number = XEN_SHM_MAJOR_NUMBER;
-static int xen_shmminor_number = 0;
+static int xen_shm_minor_number = 0;
 static dev_t xen_shm_device = 0;
 
 /*
@@ -160,7 +160,7 @@ int __init xen_shm_init() {
     }
     
     if (res < 0) {
-        printk(KERN_WARNING "xen_shm: can't get major %d\n", scull_major);
+        printk(KERN_WARNING "xen_shm: can't get major %d\n", xen_shm_major_number);
         return res;
     }
     
@@ -248,7 +248,8 @@ static int xen_shm_release(struct inode * inode, struct file * filp) {
 	 */
     
     kfree(filp->private_data);
-    
+
+    return 0;    
 }
 
 /*
@@ -264,6 +265,7 @@ static int xen_shm_mmap(struct file *filp, struct vm_area_struct *vma) {
 	 * Map the kernel's allocated memory into the user's space
 	 */
 
+    return 0;
 }
 
 /*
