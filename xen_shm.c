@@ -33,6 +33,7 @@
 #include <xen/interface/xen.h>
 #include <xen/interface/event_channel.h>
 #include <asm/page.h>
+#include <xen/grant_table.h>
 
 /*
  * Fix USHRT_MAX declaration on strange linux
@@ -57,6 +58,11 @@ typedef uint8_t xen_shm_state_t; //The state type used
 #define XEN_SHM_STATE_RECEIVER      0x03 //Memory is allocated and mapped. Pipe is connected.
 #define XEN_SHM_STATE_HALF_CLOSED   0x04 //In the offerer case, we must wait the other procees to stop using the memory.
 
+typedef uint8_t xen_shm_meta_page_state;
+
+#define XEN_SHM_META_PAGE_STATE_NONE    0x01 //The peer didn't do anything
+#define XEN_SHM_META_PAGE_STATE_OPENED  0x02 //The peer is using the pages
+#define XEN_SHM_META_PAGE_STATE_CLOSED  0x03 //Receiver: Page is going to be unmapped -- Offerer: The receiver must close asap
 
 /*
  * Private function prototypes
@@ -130,8 +136,9 @@ struct xen_shm_instance_data {
  * The first page is used to share meta-data in a more efficient way
  */
 struct xen_shm_meta_page_data {
-	uint8_t offerer_closed; // The offerer signals he wants to unmap the pages. When !=0, nothing should be written anymore and the RECEIVER should close as soon as possible.
-	uint8_t receiver_closed; //The receiver sets this to one just after unmapping the frames.
+    
+    xen_shm_meta_page_state offerer_state;  
+    xen_shm_meta_page_state receiver_state; 
     
 	uint8_t pages_count; //The number of shared pages, with the header-page. The offerer writes it and the receiver must check it agrees with what he wants
 
@@ -376,6 +383,9 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
     unsigned int order;
     uint32_t tmp_page_count;
     unsigned long alloc;
+    int error = 0;
+    int page = 0;
+    char* page_pointer ;
     
     if (data->state != XEN_SHM_STATE_OPENED) { /* Command is invalid in this state */
         return -ENOTTY;
@@ -408,32 +418,65 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
     
     //Allocating the pages
     alloc = __get_free_pages(GFP_KERNEL, order);
-    if (alloc == 0)
+    if (alloc == 0) {
+        printk(KERN_WARNING "xen_shm: could not alloc space for 2^%i pages\n", (int) order);
         return -ENOMEM;
+    }
     
     data->alloc_order = order;
-    data->pages_count = tmp_page_count;
+    data->pages_count = arg->pages_count + 1;
     data->shared_memory = alloc; 
     
     
     
     
     /* Initialize header page */
-    //TODO
+    struct xen_shm_meta_page_data* meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
+    meta_page_p->offerer_state = XEN_SHM_META_PAGE_STATE_NONE;
+    meta_page_p->receiver_state = XEN_SHM_META_PAGE_STATE_NONE;
+    
+    meta_page_p->pages_count = data->pages_count;
+    
     
     /* Grant mapping and fill header page */
-    //TODO
+    page_pointer = (char*) data->shared_memory;
+    for (page=0; page < data->pages_count; page++) {
+        meta_page_p->grant_refs[page] = gnttab_grant_foreign_access(data->distant_domid , virt_to_mfn(page_pointer), 0); //Granting access
+        if (meta_page_p->grant_refs[page] < 0) { //In case of error
+            error = meta_page_p->grant_refs[page];
+            printk(KERN_WARNING "xen_shm: could not grant %ith page (%i)\n",page, (int) res);
+            page--;
+            goto undo_grant; 
+        }
+        
+        page_pointer += PAGE_SIZE; //Go to next page
+    }
+    
     
     /* Open event channel and connect it to handler */
+    
+    
     //TODO
     
-    //TODO
     
     
-    //If OK, the state is set to offerer
-    data->state = XEN_SHM_STATE_OFFERER;   
+    
+    /* If OK, states are changed*/
+    data->state = XEN_SHM_STATE_OFFERER;
+    meta_page_p->offerer_state = XEN_SHM_META_PAGE_STATE_OPENED;
     
     return 0;
+    
+    
+undo_grant:
+    for (; page>=0; page--) {
+        gnttab_end_foreign_access_ref(meta_page_p->grant_refs[page] , 0);
+    }
+    
+undo_alloc:
+    free_pages(data->shared_memory, data->alloc_order);
+    
+    return error;
 }
 
 static int
