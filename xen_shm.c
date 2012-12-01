@@ -232,15 +232,6 @@ xen_shm_init()
         return -EFBIG;
     }
 
-    /*
-     * Init gnttab
-     */
-    res = gnttab_init();
-    if (res < 0) {
-        printk(KERN_WARNING "xen_shm: Cannot initiate gnttab (%d)\n", res);
-        return res;
-    }
-
     if (xen_shm_domid == 0) {
          /* Let's try to get it by ouselves */
          res = xen_shm_get_domid_hack();
