@@ -42,10 +42,10 @@
  */
 typedef uint8_t xen_shm_state_t; //The state type used
 
-#define XEN_SHM_STATE_OPENED         //Freshly opened device, can move to offerer or receiver
-#define XEN_SHM_STATE_OFFERER        //Memory is allocated. Event pipe created.
-#define XEN_SHM_STATE_RECEIVER       //Memory is allocated and mapped. Pipe is connected.
-#define XEN_SHM_STATE_HALF_CLOSED    //In the offerer case, we must wait the other procees to stop using the memory.
+#define XEN_SHM_STATE_OPENED        0x01 //Freshly opened device, can move to offerer or receiver
+#define XEN_SHM_STATE_OFFERER       0x02 //Memory is allocated. Event pipe created.
+#define XEN_SHM_STATE_RECEIVER      0x03 //Memory is allocated and mapped. Pipe is connected.
+#define XEN_SHM_STATE_HALF_CLOSED   0x04 //In the offerer case, we must wait the other procees to stop using the memory.
 
 
 /*
