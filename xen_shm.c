@@ -25,7 +25,9 @@
  */
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 #include <linux/fs.h>
+
 
 /*
  * The public header of this module
@@ -50,6 +52,18 @@ typedef uint8_t xen_shm_state_t; //The state type used
 
 int xen_shm_init(void);
 void xen_shm_cleanup(void);
+
+/*
+ * Global values
+ */
+
+static domid_t xen_shm_domid = 0;
+
+/*
+ * Module parameters
+ */
+module_param(xen_shm_domid, domid_t, S_IRUSR | S_IRGRP);
+MODULE_PARM_DESC(xen_shm_domid, "Local domain id");
 
 
 /*
@@ -173,7 +187,7 @@ static int xen_shm_open(struct inode * inode, struct file * filp) {
     }
     
     instance_date->state = XEN_SHM_STATE_OPENED;
-    instance_date->local_domid = 0; //TODO !! Find local domid
+    instance_date->local_domid = xen_shm_domid;
     
     return 0;
 
