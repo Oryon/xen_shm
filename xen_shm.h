@@ -53,11 +53,11 @@
 #define XEN_SHM_IOCTL_INIT_OFFERER    _IOWR(XEN_SHM_MAGIC_NUMBER, 1, struct xen_shm_ioctlarg_offerer )
 struct xen_shm_ioctlarg_offerer {
     /* In arguments */
-    uint8_t pages_count,
-    domid_t dist_domid,
-    
+    uint8_t pages_count;
+    domid_t dist_domid;
+   
     /* Out arguments */
-    grant_ref_t grant,
+    grant_ref_t grant;
 };
 
 /* 
@@ -66,9 +66,9 @@ struct xen_shm_ioctlarg_offerer {
 #define XEN_SHM_IOCTL_INIT_RECEIVER   _IOWR(XEN_SHM_MAGIC_NUMBER, 2, struct xen_shm_ioctlarg_receiver )
 struct xen_shm_ioctlarg_receiver {
     /* In arguments */
-    uint8_t pages_count,
-    domid_t dist_domid,
-    grant_ref_t grant,
+    uint8_t pages_count;
+    domid_t dist_domid;
+    grant_ref_t grant;
     
     /* Out arguments */
     
@@ -96,7 +96,7 @@ struct xen_shm_ioctlarg_getdomid {
     /* In arguments */
     
     /* Out arguments */
-    domid_t local_domid,
+    domid_t local_domid;
     
 };
 

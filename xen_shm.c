@@ -96,22 +96,22 @@ const struct file_operations xen_shm_file_ops = {
  * have to be kept in order to "close later" in the case of a blocking offerer close.
  */
 struct xen_shm_instance_data {
-	xen_shm_state_t state, //The state of this instance
+	xen_shm_state_t state; //The state of this instance
 
 
 	/* Pages info */
-	uint8_t pages_count, //The total number of consecutive allocated pages
-	uint64_t pages_phys_addr, //The physical addresses of the allocated pages
+	uint8_t pages_count; //The total number of consecutive allocated pages
+	uint64_t pages_phys_addr; //The physical addresses of the allocated pages
 
 	/* Xen grant_table data */
-	domid_t local_domid,    //The local domain id
-	domid_t distant_domid, //The distant domain id
+	domid_t local_domid;    //The local domain id
+	domid_t distant_domid; //The distant domain id
 
-	grant_handle_t[XEN_SHM_ALLOC_ALIGNED_PAGES] grant_map_handles, //For the RECEIVER only. Contains an array with all the grant handles
+	grant_handle_t grant_map_handles[XEN_SHM_ALLOC_ALIGNED_PAGES]; //For the RECEIVER only. Contains an array with all the grant handles
 
 	/* Event channel data */
-	evtchn_port_t local_ec_port, //The allocated event port number
-	evtchn_port_t dist_ec_port, //The allocated event port number
+	evtchn_port_t local_ec_port; //The allocated event port number
+	evtchn_port_t dist_ec_port; //The allocated event port number
 
 };
 
@@ -119,23 +119,23 @@ struct xen_shm_instance_data {
  * The first page is used to share meta-data in a more efficient way
  */
 struct xen_shm_meta_page_data {
-	uint8_t offerer_closed, // The offerer signals he wants to unmap the pages. When !=0, nothing should be written anymore and the RECEIVER should close as soon as possible.
-	uint8_t receiver_closed, //The receiver sets this to one just after unmapping the frames.
+	uint8_t offerer_closed; // The offerer signals he wants to unmap the pages. When !=0, nothing should be written anymore and the RECEIVER should close as soon as possible.
+	uint8_t receiver_closed; //The receiver sets this to one just after unmapping the frames.
     
-	uint8_t pages_count, //The number of shared pages, with the header-page. The offerer writes it and the receiver must check it agrees with what he wants
+	uint8_t pages_count; //The number of shared pages, with the header-page. The offerer writes it and the receiver must check it agrees with what he wants
 
 
 	/*
 	 * Informations about the event channel
 	 */
-	evtchn_port_t offerer_ec_port, //Offerer's event channel port
+	evtchn_port_t offerer_ec_port; //Offerer's event channel port
 
 
 	/*
 	 * An array containing 'pages_count' grant referances.
 	 * The first needs to be sent to the receiver, but they are all written here.
 	 */
-	grant_ref_t[XEN_SHM_ALLOC_ALIGNED_PAGES] grant_refs,
+	grant_ref_t grant_refs[XEN_SHM_ALLOC_ALIGNED_PAGES];
 
 
 
