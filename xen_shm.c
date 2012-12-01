@@ -27,7 +27,9 @@
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/fs.h>
-
+#include <stdint.h>
+#include <xen/gnttab.h>
+#include <xen/event_channel.h>
 
 /*
  * The public header of this module

@@ -19,6 +19,7 @@
  */
 
 #include <linux/ioctl.h>
+#include <xen/gnttab.h>
 
 
 
@@ -57,7 +58,7 @@ struct xen_shm_ioctlarg_offerer {
     
     /* Out arguments */
     grant_ref_t grant,
-}
+};
 
 /* 
  * Init the shared memory as the receiver domain
@@ -71,7 +72,7 @@ struct xen_shm_ioctlarg_receiver {
     
     /* Out arguments */
     
-}
+};
 
 /* 
  * Blocks until a signal is received through the event channel
@@ -97,6 +98,6 @@ struct xen_shm_ioctlarg_getdomid {
     /* Out arguments */
     domid_t local_domid,
     
-}
+};
 
 
