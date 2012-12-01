@@ -232,6 +232,9 @@ xen_shm_init()
         return -EFBIG;
     }
 
+    /*
+     * Find domid if not given
+     */
     if (xen_shm_domid == 0) {
          /* Let's try to get it by ouselves */
          res = xen_shm_get_domid_hack();
