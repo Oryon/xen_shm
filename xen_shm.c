@@ -126,7 +126,8 @@ struct xen_shm_instance_data {
 	domid_t distant_domid; //The distant domain id
 
 	grant_handle_t grant_map_handles[XEN_SHM_ALLOC_ALIGNED_PAGES]; //For the RECEIVER only. Contains an array with all the grant handles
-
+    grant_ref_t first_page_grant; //For the RECEIVER only. Contains the first page grant ref
+    
 	/* Event channel data */
 	evtchn_port_t local_ec_port; //The allocated event port number
 	evtchn_port_t dist_ec_port; //The allocated event port number
@@ -386,13 +387,50 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
     return 0;
 }
 
+static int __xen_shm_allocate_shared_memory(struct xen_shm_instance_data* data) {
+    uint32_t tmp_page_count;
+    unsigned int order;
+    unsigned long alloc;
+    
+    //Computing the order of allocation size
+    order = 0;
+    tmp_page_count = data->pages_count;
+    while (tmp_page_count != 0 ) {
+        order++;
+        tmp_page_count = tmp_page_count >> 1;
+    }
+    if (tmp_page_count==1<<(order-1)) {
+        order--;
+    }
+    
+    //Allocating the pages
+    alloc = __get_free_pages(GFP_KERNEL, order);
+    if (alloc == 0) {
+        printk(KERN_WARNING "xen_shm: could not alloc space for 2^%i pages\n", (int) order);
+        return -ENOMEM;
+    }
+    
+    data->alloc_order = order;
+    data->shared_memory = alloc; 
+    
+    return 0;
+    
+}
+
+
+static int __xen_shm_free_shared_memory(struct xen_shm_instance_data* data) {
+    return free_pages(data->shared_memory, data->alloc_order);
+}
+
+
+
+
+
 static int
 __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
                              struct xen_shm_ioctlarg_offerer* arg)
 {
-    unsigned int order;
-    uint32_t tmp_page_count;
-    unsigned long alloc;
+    
     int error = 0;
     int page = 0;
     char* page_pointer ;
@@ -410,35 +448,15 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
      * Completing file data 
      */
     data->distant_domid = arg->dist_domid;
-    
+    data->pages_count = arg->pages_count + 1;
     
     /* 
      * Allocating memory 
      */
-    
-    //Computing the order of allocation size
-    order = 0;
-    tmp_page_count = arg->pages_count + 1;
-    while (tmp_page_count != 0 ) {
-        order++;
-        tmp_page_count = tmp_page_count >> 1;
+    error = __xen_shm_allocate_shared_memory(data);
+    if (error < 0) {
+        return error;
     }
-    if (tmp_page_count==1<<(order-1)) {
-        order--;
-    }
-    
-    //Allocating the pages
-    alloc = __get_free_pages(GFP_KERNEL, order);
-    if (alloc == 0) {
-        printk(KERN_WARNING "xen_shm: could not alloc space for 2^%i pages\n", (int) order);
-        return -ENOMEM;
-    }
-    
-    data->alloc_order = order;
-    data->pages_count = arg->pages_count + 1;
-    data->shared_memory = alloc; 
-    
-    
     
     
     /* Initialize header page */
@@ -456,7 +474,6 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
         if (meta_page_p->grant_refs[page] < 0) { //In case of error
             error = meta_page_p->grant_refs[page];
             printk(KERN_WARNING "xen_shm: could not grant %ith page (%i)\n",page, (int) meta_page_p->grant_refs[page]);
-            page--;
             goto undo_grant; 
         }
         
@@ -480,12 +497,13 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
     
     
 undo_grant:
+    page--;
     for (; page>=0; page--) {
         gnttab_end_foreign_access_ref(meta_page_p->grant_refs[page] , 0);
     }
     
 //undo_alloc:
-    free_pages(data->shared_memory, data->alloc_order);
+    __xen_shm_free_shared_memory(data);
     
     return error;
 }
@@ -494,14 +512,120 @@ static int
 __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
                               struct xen_shm_ioctlarg_receiver* arg)
 {
+    
 
+    int error = 0;
+    struct gnttab_map_grant_ref grant_op;
+    struct gnttab_unmap_grant_ref unmap_op;
+    int page = 0;
+    
+    char* page_pointer ;
+    struct xen_shm_meta_page_data* meta_page_p;
+    
+    
     if (data->state != XEN_SHM_STATE_OPENED) { /* Command is invalid in this state */
         return -ENOTTY;
     }
     
+    if (arg->pages_count == 0 || arg->pages_count > XEN_SHM_MAX_SHARED_PAGES) { /* Cannot allocate this amount of pages */
+        return -EINVAL;
+    }
+    
+    /* 
+     * Completing file data 
+     */
+    data->distant_domid = arg->dist_domid;
+    data->first_page_grant = arg->grant;
+    
+    
+    /* 
+     * Allocating memory 
+     */
+    error = __xen_shm_allocate_shared_memory(data);
+    if (error != 0) {
+        return error;
+    }
+    
+    
+    
+    /*
+     * Finding the first page
+     */
+    page = 0;
+    page_pointer = (char*) data->shared_memory;
+    
+    /* Fill-up the ops data structure with all the necessary parameters */
+    error = gnttab_set_map_op(&grant_op, virt_to_phys(page_pointer), GNTMAP_host_map, data->first_page_grant, data->distant_domid);
+    if (error != 0) {
+        goto undo_alloc;
+    }
+    
+    if (HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, &grant_op, 1)) {
+        printk("[sop_shm_mapper] HYPERVISOR map grant ref failed");
+        error = -EFAULT;
+        goto undo_alloc;
+    }
+    
+    data->grant_map_handles[0] = grant_op.handle;
+    page++;
+    page_pointer+=PAGE_SIZE;
+    
+    
+    /*
+     * Checking compatibility
+     */
+    meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
+    
+    if (data->pages_count != meta_page_p->pages_count ) { //Not the same number of pages on both sides 
+        error = -EINVAL; 
+        goto undo_map;
+    }
+    
+     
+    
+    
+    /*
+     * Mapping the other pages
+     */
+    for (page = 1; page < data->pages_count; page++) {
+        error = gnttab_set_map_op(&grant_op, virt_to_phys(page_pointer), GNTMAP_host_map, meta_page_p->grant_refs[page], data->distant_domid);
+        if (error != 0) {
+            page_pointer+=PAGE_SIZE;
+            goto undo_map;
+        }
+        
+        if (HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, &grant_op, 1)) {
+            printk("[sop_shm_mapper] HYPERVISOR map grant ref failed");
+            error = -EFAULT;
+            page_pointer+=PAGE_SIZE;
+            goto undo_map;
+        }
+        
+        
+        page_pointer+=PAGE_SIZE;
+    }
+    
+    /*
+     * Connecting the event channel
+     */
+    
     //TODO
     
     return 0;
+    
+    
+undo_map:
+    page--;
+    page_pointer -= PAGE_SIZE
+    for (; page>=0; page--) {
+        gnttab_set_unmap_op(&unmap_op, virt_to_phys(page_pointer), GNTMAP_host_map, data->grant_map_handles[page]);
+        HYPERVISOR_grant_table_op(GNTTABOP_unmap_grant_ref, &unmap_op, 1);
+    }
+    
+undo_alloc:
+    free_pages(data->shared_memory, data->alloc_order);
+    
+    return error;
 }
 
 
