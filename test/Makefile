@@ -24,10 +24,16 @@ CFLAGS?=-pipe -O2 -g -Wall -Wextra -Werror \
         -Wno-format-y2k \
         -Wunsafe-loop-optimizations
 
-all: getdomid
+all: getdomid propose_content get_content
 
 test: all
 	./getdomid
 
 getdomid: getdomid.o
+	$(LINK.c) $^ $(LOADLIBES) -o $@
+
+propose_content: propose_content.o
+	$(LINK.c) $^ $(LOADLIBES) -o $@
+
+get_content: get_content.o
 	$(LINK.c) $^ $(LOADLIBES) -o $@

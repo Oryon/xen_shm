@@ -1,3 +1,5 @@
 *.o
 *~
 getdomid
+get_content
+propose_content
