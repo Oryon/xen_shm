@@ -284,7 +284,7 @@ static long xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg
      * Structs for the different switchs
      */
     struct xen_shm_ioctlarg_offerer offerer_karg;
-    struct xen_shm_ioctlarg_receiver reveiver_karg;
+    struct xen_shm_ioctlarg_receiver receiver_karg;
     struct xen_shm_ioctlarg_getdomid getdomid_karg;
     
     /* retval */
