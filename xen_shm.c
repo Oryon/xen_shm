@@ -103,7 +103,7 @@ struct xen_shm_instance_data {
 	/* Pages info */
 	uint8_t pages_count; //The total number of consecutive allocated pages (with the header page)
     unsigned int alloc_order;  //Saved value of 'order'. Is used when freeing the pages
-	void* shared_memory; //The kernel addresses of the allocated pages
+	unsigned long shared_memory; //The kernel addresses of the allocated pages (can also be void*)
 
 	/* Xen grant_table data */
 	domid_t local_domid;    //The local domain id
@@ -280,6 +280,10 @@ static int xen_shm_mmap(struct file *filp, struct vm_area_struct *vma) {
 
 static int __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data, struct xen_shm_ioctlarg_offerer* arg) {
     
+    unsigned int order;
+    uint32_t tmp_page_count;
+    unsigned long alloc;
+    
     if (data->state != XEN_SHM_STATE_OPENED) { /* Command is invalid in this state */
         return -ENOTTY;
     }
@@ -299,8 +303,8 @@ static int __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data, stru
      */
     
     //Computing the order of allocation size
-    unsigned int order = 0;
-    uint32_t tmp_page_count = arg->pages_count + 1;
+    order = 0;
+    tmp_page_count = arg->pages_count + 1;
     while (tmp_page_count != 0 ) {
         order++;
         tmp_page_count = tmp_page_count >> 1;
@@ -310,13 +314,13 @@ static int __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data, stru
     }
     
     //Allocating the pages
-    void* alloc = __get_free_pages(GFP_KERNEL, order);
-    if (alloc == NULL)
+    alloc = __get_free_pages(GFP_KERNEL, order);
+    if (alloc == 0)
         return -ENOMEM;
     
     data->alloc_order = order;
     data->pages_count = tmp_page_count;
-    data->shared_memory = alloc;
+    data->shared_memory = alloc; 
     
     
     
