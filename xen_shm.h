@@ -18,6 +18,9 @@
  *
  */
 
+#ifndef __XEN_SHM_H__
+#define __XEN_SHM_H__
+
 #include <linux/ioctl.h>
 #include <xen/interface/grant_table.h>
 
@@ -100,4 +103,4 @@ struct xen_shm_ioctlarg_getdomid {
     
 };
 
-
+#endif
