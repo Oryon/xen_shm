@@ -23,10 +23,12 @@
 /*
  * Headers for file system implementation
  */
+#include <asm/page.h>
 #include <asm/xen/hypercall.h>
 #include <linux/cdev.h>
 #include <linux/fs.h>
 #include <linux/kernel.h>
+#include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/slab.h>
@@ -543,14 +545,35 @@ __xen_shm_add_delayed_free(struct xen_shm_instance_data* data) {
 static int
 xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
 {
+    struct xen_shm_instance_data* data;
 
-    /*
-     * Test if the memory has been allocated
-     */
+    data = (struct xen_shm_instance_data*) filp->private_data;
 
-    /*
-     * Map the kernel's allocated memory into the user's space
-     */
+    switch(data->state) {
+        case XEN_SHM_STATE_OPENED:
+            // Too soon
+            return -ENODATA;
+        case XEN_SHM_STATE_OFFERER:
+            // Verify size
+            if (vma->vm_end - vma->vm_start != (data->pages_count - 1) * PAGE_SIZE) {
+                printk(KERN_WARNING "xen_shm: Only mapping of the right size are accepted\n");
+                return -EINVAL;
+            }
+            // Ok, map logical memory
+            return remap_pfn_range(vma, vma->vm_start, virt_to_pfn(data->shared_memory + PAGE_SIZE), vma->vm_end - vma->vm_start, vma->vm_page_prot);
+        case XEN_SHM_STATE_RECEIVER:
+            // Verify size
+            if (vma->vm_end - vma->vm_start != (data->pages_count - 1) * PAGE_SIZE) {
+                printk(KERN_WARNING "xen_shm: Only mapping of the right size are accepted\n");
+                return -EINVAL;
+            }
+            // Ok, map logical memory
+            return -ENOSYS;
+            //return remap_pfn_range(vma, vma->vm_start, virt_to_pfn(data->unmapped_area + PAGE_SIZE), vma->vm_end - vma->vm_start, vma->vm_page_prot);
+        default:
+            printk(KERN_WARNING "xen_shm: Impossible state !\n");
+            break;
+    }
 
     return -ENOSYS;
 }
