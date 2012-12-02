@@ -619,7 +619,8 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
             page_pointer+=PAGE_SIZE;
             goto undo_map;
         }
-
+        
+        data->grant_map_handles[page] = map_op.handle;
 
         page_pointer+=PAGE_SIZE;
     }
