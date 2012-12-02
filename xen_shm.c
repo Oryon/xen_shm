@@ -159,7 +159,7 @@ struct xen_shm_instance_data {
 /*
  * Delayed free queue
  */
-struct xen_shm_instance_data* delayed_free_queue = NULL;
+static struct xen_shm_instance_data* xen_shm_delayed_free_queue = NULL;
 
 
 /*
@@ -201,7 +201,7 @@ static void __xen_shm_free_shared_memory_receiver(struct xen_shm_instance_data* 
 static void __xen_shm_free_shared_memory_offerer(struct xen_shm_instance_data* data);
 static int __xen_shm_prepare_free(struct xen_shm_instance_data* data);
 static void __xen_shm_add_delayed_free(struct xen_shm_instance_data* data);
-static void __xen_shm_free_delayed_queue();
+static void __xen_shm_free_delayed_queue(void);
 
 /*
  * Code :)
@@ -440,7 +440,27 @@ static void
 __xen_shm_free_delayed_queue() {
     struct xen_shm_instance_data* current;
     struct xen_shm_instance_data* previous;
+    struct xen_shm_instance_data* to_delete;
     
+    previous = NULL;
+    current = xen_shm_delayed_free_queue;
+    
+    while (current != NULL) {
+        if (__xen_shm_prepare_free(data)==0) { //On peut supprimer
+            to_delete = current;
+            if (previous == NULL) { //Premier élément de la liste
+                xen_shm_delayed_free_queue = current->next_delayed;
+            } else {
+                previous->next_delayed = current->next_delayed;
+            }
+            current = current->next_delayed; //Next
+                
+            kfree(to_delete); 
+        } else {
+            previous = current;
+            current = current->next_delayed;
+        }
+    }
     
     
 }
@@ -492,8 +512,8 @@ xen_shm_release(struct inode * inode, struct file * filp)
 static void
 __xen_shm_add_delayed_free(struct xen_shm_instance_data* data) {
     printk(KERN_WARNING "xen_shm: Data cannot be free. Adding to queue. !\n");
-    data->next_delayed = delayed_free_queue;
-    delayed_free_queue = data->next_delayed;
+    data->next_delayed = xen_shm_delayed_free_queue;
+    xen_shm_delayed_free_queue = data->next_delayed;
 }
 
 /*
