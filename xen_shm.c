@@ -584,7 +584,7 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
         goto undo_alloc;
     }
 
-    data->grant_map_handles[0] = grant_op.handle;
+    data->grant_map_handles[0] = map_op.handle;
     page++;
     page_pointer+=PAGE_SIZE;
 
