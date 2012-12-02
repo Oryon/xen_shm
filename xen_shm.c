@@ -32,6 +32,7 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/version.h>
+#include <linux/vmalloc.h>
 #include <xen/interface/xen.h>
 #include <xen/interface/event_channel.h>
 #include <asm/page.h>
