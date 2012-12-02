@@ -581,8 +581,14 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     map_op.dom = data->distant_domid;
 
     if (HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, &map_op, 1)) {
-        printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed");
+        printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed\n");
         error = -EFAULT;
+        goto undo_alloc;
+    }
+    
+    if (map_op->status < 0) {
+        printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed with error %i : %s\n", map_op->status, GNTTABOP_error_msgs[-map_op->status]);
+        error = -EINVAL;
         goto undo_alloc;
     }
 
@@ -597,7 +603,7 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
 
     if (data->pages_count != meta_page_p->pages_count ) { //Not the same number of pages on both sides
-        printk(KERN_WARNING "xen_shm: Pages count is incorrect. Locally %i VS %i distantly.",(int)data->pages_count, (int)meta_page_p->pages_count );
+        printk(KERN_WARNING "xen_shm: Pages count is incorrect. Locally %i VS %i distantly.\n",(int)data->pages_count, (int)meta_page_p->pages_count );
         error = -EINVAL;
         goto undo_map;
     }
@@ -620,6 +626,13 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
             error = -EFAULT;
             page_pointer+=PAGE_SIZE;
             goto undo_map;
+        }
+        
+        if (map_op->status < 0) {
+            printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed with error %i : %s\n", map_op->status, GNTTABOP_error_msgs[-map_op->status]);
+            error = -EINVAL;
+            page_pointer+=PAGE_SIZE;
+            goto undo_alloc;
         }
         
         data->grant_map_handles[page] = map_op.handle;
