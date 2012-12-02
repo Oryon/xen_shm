@@ -166,7 +166,20 @@ struct xen_shm_meta_page_data {
 
 };
 
-static int xen_shm_get_domid_hack(void) {
+/*
+ * Other private function prototypes
+ */
+static int __xen_shm_get_domid_hack(void);
+static void __xen_shm_free_shared_memory(struct xen_shm_instance_data* data);
+static int __xen_shm_allocate_shared_memory(struct xen_shm_instance_data* data);
+static int __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data, struct xen_shm_ioctlarg_offerer* arg);
+static int __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data, struct xen_shm_ioctlarg_receiver* arg);
+
+/*
+ * Code :)
+ */
+
+static int __xen_shm_get_domid_hack(void) {
     int retval;
     /* Structs */
     struct evtchn_alloc_unbound alloc_unbound = {
@@ -238,7 +251,7 @@ xen_shm_init()
      */
     if (xen_shm_domid == 0) {
          /* Let's try to get it by ouselves */
-         res = xen_shm_get_domid_hack();
+         res = __xen_shm_get_domid_hack();
          if (res < 0) {
              printk(KERN_WARNING "xen_shm: can't obtain local domid, try to set it by yourself (%i)\n", res);
              return res;
@@ -306,6 +319,7 @@ xen_shm_cleanup()
 
 /*
  * Called when a user wants to open the device
+ * Memory is not allocated yet because the size will be specified by the user with an ioctl.
  */
 static int
 xen_shm_open(struct inode * inode, struct file * filp)
@@ -327,12 +341,6 @@ xen_shm_open(struct inode * inode, struct file * filp)
     filp->private_data = (void *) instance_data;
 
     return 0;
-
-    /*
-     * Memory is not allocated yet because the size will be specified by the user with an ioctl.
-     * So this method doesn't do so much.
-     */
-
 }
 
 /*
@@ -402,12 +410,14 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
     return -ENOSYS;
 }
 
-static int __xen_shm_allocate_shared_memory(struct xen_shm_instance_data* data) {
+static int
+__xen_shm_allocate_shared_memory(struct xen_shm_instance_data* data)
+{
     uint32_t tmp_page_count;
     unsigned int order;
     unsigned long alloc;
 
-    //Computing the order of allocation size
+    // Computing the order of allocation size
     order = 0;
     tmp_page_count = data->pages_count;
     while (tmp_page_count != 0 ) {
@@ -418,7 +428,7 @@ static int __xen_shm_allocate_shared_memory(struct xen_shm_instance_data* data) 
         order--;
     }
 
-    //Allocating the pages
+    // Allocating the pages
     alloc = __get_free_pages(GFP_KERNEL, order);
     if (alloc == 0) {
         printk(KERN_WARNING "xen_shm: could not alloc space for 2^%i pages\n", (int) order);
@@ -433,29 +443,28 @@ static int __xen_shm_allocate_shared_memory(struct xen_shm_instance_data* data) 
 }
 
 
-static void __xen_shm_free_shared_memory(struct xen_shm_instance_data* data) {
+static void
+__xen_shm_free_shared_memory(struct xen_shm_instance_data* data)
+{
     free_pages(data->shared_memory, data->alloc_order);
 }
-
-
-
-
 
 static int
 __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
                              struct xen_shm_ioctlarg_offerer* arg)
 {
+    int error;
+    int page;
+    char *page_pointer;
+    struct xen_shm_meta_page_data *meta_page_p;
 
-    int error = 0;
-    int page = 0;
-    char* page_pointer ;
-    struct xen_shm_meta_page_data* meta_page_p;
-
-    if (data->state != XEN_SHM_STATE_OPENED) { /* Command is invalid in this state */
+    if (data->state != XEN_SHM_STATE_OPENED) {
+        /* Command is invalid in this state */
         return -ENOTTY;
     }
 
-    if (arg->pages_count == 0 || arg->pages_count > XEN_SHM_MAX_SHARED_PAGES) { /* Cannot allocate this amount of pages */
+    if (arg->pages_count == 0 || arg->pages_count > XEN_SHM_MAX_SHARED_PAGES) {
+        /* Cannot allocate this amount of pages */
         printk(KERN_WARNING "xen_shm: Pages count is out of bound (%i).",arg->pages_count );
         return -EINVAL;
     }
@@ -463,7 +472,7 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
     /*
      * Completing file data
      */
-    data->distant_domid = (arg->dist_domid==DOMID_SELF)?data->local_domid:arg->dist_domid;
+    data->distant_domid = (arg->dist_domid == DOMID_SELF) ? data->local_domid : arg->dist_domid;
     data->pages_count = arg->pages_count + 1;
 
     /*
@@ -473,7 +482,6 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
     if (error < 0) {
         return error;
     }
-
 
     /* Initialize header page */
     meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
@@ -512,14 +520,11 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
 
     return 0;
 
-
 undo_grant:
     page--;
     for (; page>=0; page--) {
-        gnttab_end_foreign_access_ref(meta_page_p->grant_refs[page] , 0);
+        gnttab_end_foreign_access_ref(meta_page_p->grant_refs[page], 0);
     }
-
-//undo_alloc:
     __xen_shm_free_shared_memory(data);
 
     return error;
@@ -529,23 +534,22 @@ static int
 __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
                               struct xen_shm_ioctlarg_receiver* arg)
 {
-
-
-    int error = 0;
+    int page;
+    int error;
     struct gnttab_map_grant_ref map_op;
     struct gnttab_unmap_grant_ref unmap_op;
-    int page = 0;
 
     char* page_pointer ;
     struct xen_shm_meta_page_data* meta_page_p;
     struct vm_struct *unmapped_area;
 
-
-    if (data->state != XEN_SHM_STATE_OPENED) { /* Command is invalid in this state */
+    if (data->state != XEN_SHM_STATE_OPENED) {
+        /* Command is invalid in this state */
         return -ENOTTY;
     }
 
-    if (arg->pages_count == 0 || arg->pages_count > XEN_SHM_MAX_SHARED_PAGES) { /* Cannot allocate this amount of pages */
+    if (arg->pages_count == 0 || arg->pages_count > XEN_SHM_MAX_SHARED_PAGES) {
+        /* Cannot allocate this amount of pages */
         printk(KERN_WARNING "xen_shm: Pages count is out of bound (%i).",arg->pages_count );
         return -EINVAL;
     }
@@ -633,6 +637,10 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
      */
 
     //TODO
+
+    /* If OK, states are changed*/
+    data->state = XEN_SHM_STATE_RECEIVER;
+    meta_page_p->receiver_state = XEN_SHM_META_PAGE_STATE_OPENED;
 
     return 0;
 
