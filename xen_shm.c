@@ -415,6 +415,7 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data){
             return 0;
         default:
             printk(KERN_WARNING "xen_shm: Impossible state !\n");
+            return -2;
             break;
     }
     
