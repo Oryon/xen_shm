@@ -69,7 +69,6 @@ typedef uint8_t xen_shm_state_t; //The state type used
 #define XEN_SHM_STATE_OPENED        0x01 //Freshly opened device, can move to offerer or receiver
 #define XEN_SHM_STATE_OFFERER       0x02 //Memory is allocated. Event pipe created.
 #define XEN_SHM_STATE_RECEIVER      0x03 //Memory is allocated and mapped. Pipe is connected.
-#define XEN_SHM_STATE_HALF_CLOSED   0x04 //In the offerer case, we must wait the other procees to stop using the memory.
 
 typedef uint8_t xen_shm_meta_page_state;
 
@@ -146,7 +145,7 @@ struct xen_shm_instance_data {
     domid_t distant_domid;  //The distant domain id
     
     grant_handle_t grant_map_handles[XEN_SHM_ALLOC_ALIGNED_PAGES]; //Receiver only: pages_count grant handles
-    grant_ref_t first_page_grant;                                  //Receiver only: first page grant reference
+    grant_ref_t    first_page_grant;                               //Receiver only: first page grant reference
 
     /* Event channel data */
     evtchn_port_t local_ec_port; //The allocated event port number
@@ -187,6 +186,8 @@ static void __xen_shm_free_shared_memory_offerer(struct xen_shm_instance_data* d
 static int __xen_shm_allocate_shared_memory_offerer(struct xen_shm_instance_data* data);
 static int __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data, struct xen_shm_ioctlarg_offerer* arg);
 static int __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data, struct xen_shm_ioctlarg_receiver* arg);
+static int __xen_shm_prepare_free(struct xen_shm_instance_data* data);
+static void __xen_shm_add_delayed_free(struct xen_shm_instance_data* data);
 
 /*
  * Code :)
@@ -357,6 +358,67 @@ xen_shm_open(struct inode * inode, struct file * filp)
     return 0;
 }
 
+/*
+ * After the users asked to close the file, it does everything to undo the mapping/granting.
+ * Returns 0 if data can be safely forgot. A negative value if it cannot yet.
+ */
+static int
+__xen_shm_prepare_free(struct xen_shm_instance_data* data){
+    
+    struct gnttab_unmap_grant_ref unmap_op;
+    struct xen_shm_meta_page_data *meta_page_p;
+    
+    meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
+    
+    /*
+     * Xen grant table state must be restored (unmap on receiver side and end grant on offerer side)
+     */
+    switch(data->state) {
+        case XEN_SHM_STATE_OPENED:
+            return 0;
+        case XEN_SHM_STATE_OFFERER:
+            //Try to free data pages first
+            while (data->pages_count != 0) {
+                if( gnttab_end_foreign_access_ref(meta_page_p->grant_refs[data->pages_count-1], 0) ) {
+                    data->pages_count--;
+                } else {
+                    printk(KERN_WARNING "xen_shm: Grant ref %i still in use !\n", unmap_op.status);
+                    return -1;
+                }
+            }
+            
+            
+            //Freeing memory
+            __xen_shm_free_shared_memory_offerer(data);
+            
+            return 0;
+            
+        case XEN_SHM_STATE_RECEIVER:
+            //Try to unmap all entries
+            while (data->pages_count != 0) {
+                gnttab_set_unmap_op(&unmap_op, ((unsigned long) data->shared_memory) + PAGE_SIZE * (data->pages_count-1), GNTMAP_host_map, data->grant_map_handles[data->pages_count - 1]);
+                HYPERVISOR_grant_table_op(GNTTABOP_unmap_grant_ref, &unmap_op, 1);
+                if(unmap_op.status == 0) {
+                    data->pages_count--;
+                } else {
+                    printk(KERN_WARNING "xen_shm: Could not unmap a page in receiver mode (should not happen). Error:%i !\n", unmap_op.status);
+                    return -1;
+                }
+            }
+            
+            
+            //Freeing memory
+            __xen_shm_free_shared_memory_receiver(data);
+            
+            return 0;
+        default:
+            printk(KERN_WARNING "xen_shm: Impossible state !\n");
+            break;
+    }
+    
+    
+    
+}
 
 
 /*
@@ -368,7 +430,7 @@ static int
 xen_shm_release(struct inode * inode, struct file * filp)
 {
     struct xen_shm_instance_data* data;
-    struct gnttab_unmap_grant_ref unmap_op;
+    
     /*
      * Warning: Remember the OFFERER grants and ungrant the pages.
      *          The RECEIVER map and unmap the pages.
@@ -381,67 +443,30 @@ xen_shm_release(struct inode * inode, struct file * filp)
      */
 
     data = (struct xen_shm_instance_data*) filp->private_data;
-
-    /*
-     * Mapped user memory needs to be unmapped
-     */
-
-    /*
-     * Xen grant table state must be restored (unmap on receiver side and end grant on offerer side)
-     */
-    switch(data->state) {
-        case XEN_SHM_STATE_OPENED:
-            /* Nothing to do here ! */
-            break;
-        case XEN_SHM_STATE_OFFERER:
-            //TODO
-
-            break;
-        case XEN_SHM_STATE_RECEIVER:
-            while (data->pages_count != 0) {
-                gnttab_set_unmap_op(&unmap_op, ((unsigned long) data->shared_memory) + PAGE_SIZE * data->pages_count, GNTMAP_host_map, data->grant_map_handles[data->pages_count]);
-                HYPERVISOR_grant_table_op(GNTTABOP_unmap_grant_ref, &unmap_op, 1);
-                --data->pages_count;
-            }
-            break;
-        case XEN_SHM_STATE_HALF_CLOSED:
-             //TODO
-            break;
-        default:
-            printk(KERN_WARNING "xen_shm: Impossible state !\n");
-            break;
+    
+    //Close the event channel
+    //TODO...
+    
+    
+    
+    //Try to prepare the free
+    if (__xen_shm_prepare_free(data)) {
+        __xen_shm_add_delayed_free(data);
+        return 0;
     }
-
-    /*
-     * Event channel must be closed
-     */
-
-    /*
-     * Allocated memory must be freed
-     */
-    switch(data->state) {
-        case XEN_SHM_STATE_OPENED:
-            /* Nothing to do here ! */
-            break;
-        case XEN_SHM_STATE_OFFERER:
-            __xen_shm_free_shared_memory_offerer(data);
-            //TODO: Must only be done when other side ok
-            break;
-        case XEN_SHM_STATE_RECEIVER:
-            free_vm_area(data->unmapped_area);
-            break;
-        case XEN_SHM_STATE_HALF_CLOSED:
-            __xen_shm_free_shared_memory_offerer(data);
-             //TODO ?
-            break;
-        default:
-            printk(KERN_WARNING "xen_shm: Impossible state !\n");
-            break;
-    }
-
-    kfree(filp->private_data);  //TODO: Must only be done when other side ok
+    
+    kfree(filp->private_data); 
 
     return 0;
+}
+
+
+/*
+ * Is called when a free cannot be done imidiatly. The data must be put in some queue and deleted later.
+ */
+static void
+__xen_shm_add_delayed_free(struct xen_shm_instance_data* data) {
+    printk(KERN_WARNING "xen_shm: Memory leak !\n");
 }
 
 /*
@@ -494,7 +519,7 @@ __xen_shm_allocate_shared_memory_offerer(struct xen_shm_instance_data* data)
 
 }
 
-
+//Free the offerer memory pages
 static void
 __xen_shm_free_shared_memory_offerer(struct xen_shm_instance_data* data)
 {
@@ -502,6 +527,15 @@ __xen_shm_free_shared_memory_offerer(struct xen_shm_instance_data* data)
         free_pages(data->shared_memory, data->offerer_alloc_order);
     }
 }
+
+//Free the receiver memory pages
+static void
+__xen_shm_free_shared_memory_receiver(struct xen_shm_instance_data* data)
+{
+    free_vm_area(data->unmapped_area);
+}
+
+
 
 static int
 __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
@@ -695,6 +729,7 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     data->state = XEN_SHM_STATE_RECEIVER;
     meta_page_p->receiver_state = XEN_SHM_META_PAGE_STATE_OPENED;
 
+
     return 0;
 
 
@@ -707,7 +742,7 @@ undo_map:
     }
 
 undo_alloc:
-    free_vm_area(data->unmapped_area);
+    __xen_shm_free_shared_memory_receiver(data);
 
     return error;
 }
