@@ -124,7 +124,8 @@ struct xen_shm_instance_data {
     /* Pages info */
     uint8_t pages_count; //The total number of consecutive allocated pages (with the header page)
     unsigned int alloc_order;  //Saved value of 'order'. Is used when freeing the pages
-    unsigned long shared_memory; //The kernel addresses of the allocated pages (can also be void*)
+    unsigned long shared_memory; //The kernel addresses of the allocated pages on the offerrer
+    struct vm_struct *unmapped_area; //Virtual memeroy space allocated on the receiver
 
     /* Xen grant_table data */
     domid_t local_domid;    //The local domain id
@@ -337,6 +338,7 @@ xen_shm_open(struct inode * inode, struct file * filp)
 
     instance_data->state = XEN_SHM_STATE_OPENED;
     instance_data->local_domid = xen_shm_domid;
+    instance_data->shared_memory = 0;
 
     filp->private_data = (void *) instance_data;
 
@@ -351,7 +353,8 @@ xen_shm_open(struct inode * inode, struct file * filp)
 static int
 xen_shm_release(struct inode * inode, struct file * filp)
 {
-
+    struct xen_shm_instance_data* data;
+    struct gnttab_unmap_grant_ref unmap_op;
     /*
      * Warning: Remember the OFFERER grants and ungrant the pages.
      *          The RECEIVER map and unmap the pages.
@@ -363,7 +366,7 @@ xen_shm_release(struct inode * inode, struct file * filp)
      *            Maybe we should use the first page for information purposes ? (like using a value to know if the kmalloc can be freed)
      */
 
-    struct xen_shm_instance_data* data = (struct xen_shm_instance_data*) filp->private_data;
+    data = (struct xen_shm_instance_data*) filp->private_data;
 
     /*
      * Mapped user memory needs to be unmapped
@@ -372,6 +375,28 @@ xen_shm_release(struct inode * inode, struct file * filp)
     /*
      * Xen grant table state must be restored (unmap on receiver side and end grant on offerer side)
      */
+    switch(data->state) {
+        case XEN_SHM_STATE_OPENED:
+            /* Nothing to do here ! */
+            break;
+        case XEN_SHM_STATE_OFFERER:
+            //TODO
+
+            break;
+        case XEN_SHM_STATE_RECEIVER:
+            while (data->pages_count != 0) {
+                gnttab_set_unmap_op(&unmap_op, ((unsigned long) data->shared_memory) + PAGE_SIZE * data->pages_count, GNTMAP_host_map, data->grant_map_handles[data->pages_count]);
+                HYPERVISOR_grant_table_op(GNTTABOP_unmap_grant_ref, &unmap_op, 1);
+                --data->pages_count;
+            }
+            break;
+        case XEN_SHM_STATE_HALF_CLOSED:
+             //TODO
+            break;
+        default:
+            printk(KERN_WARNING "xen_shm: Impossible state !\n");
+            break;
+    }
 
     /*
      * Event channel must be closed
@@ -380,12 +405,25 @@ xen_shm_release(struct inode * inode, struct file * filp)
     /*
      * Allocated memory must be freed
      */
-    if (data->state != XEN_SHM_STATE_OPENED) {
-        free_pages(data->shared_memory, data->alloc_order); //TODO: Must only be done when other side ok
+    switch(data->state) {
+        case XEN_SHM_STATE_OPENED:
+            /* Nothing to do here ! */
+            break;
+        case XEN_SHM_STATE_OFFERER:
+            __xen_shm_free_shared_memory(data);
+            //TODO: Must only be done when other side ok
+            break;
+        case XEN_SHM_STATE_RECEIVER:
+            free_vm_area(data->unmapped_area);
+            break;
+        case XEN_SHM_STATE_HALF_CLOSED:
+            __xen_shm_free_shared_memory(data);
+             //TODO ?
+            break;
+        default:
+            printk(KERN_WARNING "xen_shm: Impossible state !\n");
+            break;
     }
-
-
-
 
     kfree(filp->private_data);  //TODO: Must only be done when other side ok
 
@@ -446,7 +484,9 @@ __xen_shm_allocate_shared_memory(struct xen_shm_instance_data* data)
 static void
 __xen_shm_free_shared_memory(struct xen_shm_instance_data* data)
 {
-    free_pages(data->shared_memory, data->alloc_order);
+    if (data->shared_memory != 0) {
+        free_pages(data->shared_memory, data->alloc_order);
+    }
 }
 
 static int
@@ -541,7 +581,6 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
 
     char* page_pointer ;
     struct xen_shm_meta_page_data* meta_page_p;
-    struct vm_struct *unmapped_area;
 
     if (data->state != XEN_SHM_STATE_OPENED) {
         /* Command is invalid in this state */
@@ -564,17 +603,17 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     /*
      * Allocating memory space
      */
-    unmapped_area = alloc_vm_area(data->pages_count * PAGE_SIZE, NULL);
-    if (unmapped_area == NULL) {
+    data->unmapped_area = alloc_vm_area(data->pages_count * PAGE_SIZE, NULL);
+    if (data->unmapped_area == NULL) {
         printk(KERN_WARNING "xen_shm: Cannot allocate vm area.");
         return -ENOMEM;
     }
-    data->shared_memory = (unsigned long) unmapped_area->addr;
+    data->shared_memory = (unsigned long) data->unmapped_area->addr;
 
     /*
      * Finding the first page
      */
-    map_op.host_addr = (unsigned long) unmapped_area->addr;
+    map_op.host_addr = (unsigned long) data->unmapped_area->addr;
     map_op.flags = GNTMAP_host_map;
     map_op.ref = data->first_page_grant;
     map_op.dom = data->distant_domid;
@@ -593,7 +632,7 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
 
     data->grant_map_handles[0] = map_op.handle;
     page = 1;
-    page_pointer = unmapped_area->addr + PAGE_SIZE;
+    page_pointer = data->unmapped_area->addr + PAGE_SIZE;
 
     /*
      * Checking compatibility
@@ -654,7 +693,7 @@ undo_map:
     }
 
 undo_alloc:
-    free_vm_area(unmapped_area);
+    free_vm_area(data->unmapped_area);
 
     return error;
 }
