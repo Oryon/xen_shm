@@ -31,6 +31,7 @@
 #include <linux/moduleparam.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <linux/version.h>
 #include <xen/interface/xen.h>
 #include <xen/interface/event_channel.h>
 #include <asm/page.h>
@@ -48,6 +49,15 @@
  * The public header of this module
  */
 #include "xen_shm.h"
+
+/*
+ * Deal with moving functions
+ */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
+# define XEN_SHM_ALLOC_VM_AREA(x) alloc_vm_area(x)
+#else /* LINUX_VERSION_CODE > KERNEL_VERSION(3, 0, 0) */
+# define XEN_SHM_ALLOC_VM_AREA(x) alloc_vm_area(x, NULL)
+#endif /* LINUX_VERSION_CODE ? KERNEL_VERSION(3, 0, 0) */
 
 
 /*
@@ -603,7 +613,7 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     /*
      * Allocating memory space
      */
-    data->unmapped_area = alloc_vm_area(data->pages_count * PAGE_SIZE, NULL);
+    data->unmapped_area = XEN_SHM_ALLOC_VM_AREA(data->pages_count * PAGE_SIZE);
     if (data->unmapped_area == NULL) {
         printk(KERN_WARNING "xen_shm: Cannot allocate vm area.");
         return -ENOMEM;
