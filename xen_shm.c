@@ -186,6 +186,8 @@ static void __xen_shm_free_shared_memory_offerer(struct xen_shm_instance_data* d
 static int __xen_shm_allocate_shared_memory_offerer(struct xen_shm_instance_data* data);
 static int __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data, struct xen_shm_ioctlarg_offerer* arg);
 static int __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data, struct xen_shm_ioctlarg_receiver* arg);
+static void __xen_shm_free_shared_memory_receiver(struct xen_shm_instance_data* data);
+static void __xen_shm_free_shared_memory_offerer(struct xen_shm_instance_data* data);
 static int __xen_shm_prepare_free(struct xen_shm_instance_data* data);
 static void __xen_shm_add_delayed_free(struct xen_shm_instance_data* data);
 
