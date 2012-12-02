@@ -497,7 +497,6 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
 
     //Set argument respond
     arg->grant = meta_page_p->grant_refs[0];
-    printk(KERN_WARNING "xen_shm: first grant ref: %i\n", arg->grant);
 
     /* Open event channel and connect it to handler */
 
