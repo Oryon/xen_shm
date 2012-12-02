@@ -530,7 +530,7 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
 
 
     int error = 0;
-    struct gnttab_map_grant_ref grant_op;
+    struct gnttab_map_grant_ref map_op;
     struct gnttab_unmap_grant_ref unmap_op;
     int page = 0;
 
@@ -572,9 +572,13 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     page_pointer = (char*) data->shared_memory;
 
     /* Fill-up the ops data structure with all the necessary parameters */
-    gnttab_set_map_op(&grant_op, (unsigned long) page_pointer , GNTMAP_host_map, data->first_page_grant, data->distant_domid);
+    //gnttab_set_map_op(&map_op, (unsigned long) page_pointer , GNTMAP_host_map, data->first_page_grant, data->distant_domid);
+    map_op.host_addr = (unsigned long) page_pointer;
+    map_op.flags = GNTMAP_host_map;
+    map_op.ref = data->first_page_grant;
+    map_op.dom = data->distant_domid;
 
-    if (HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, &grant_op, 1)) {
+    if (HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, &map_op, 1)) {
         printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed");
         error = -EFAULT;
         goto undo_alloc;
@@ -603,8 +607,11 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
      * Mapping the other pages
      */
     for (page = 1; page < data->pages_count; page++) {
-        gnttab_set_map_op(&grant_op, (unsigned long) page_pointer, GNTMAP_host_map, meta_page_p->grant_refs[page], data->distant_domid);
-
+        //gnttab_set_map_op(&grant_op, (unsigned long) page_pointer, GNTMAP_host_map, meta_page_p->grant_refs[page], data->distant_domid);
+        map_op.host_addr = (unsigned long) page_pointer;
+        map_op.flags = GNTMAP_host_map;
+        map_op.ref = meta_page_p->grant_refs[page];
+        map_op.dom = data->distant_domid;
 
         if (HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, &grant_op, 1)) {
             printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed");
