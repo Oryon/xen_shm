@@ -133,17 +133,20 @@ struct xen_shm_instance_data {
 
 
     /* Pages info */
-    uint8_t pages_count; //The total number of consecutive allocated pages (with the header page)
-    unsigned int alloc_order;  //Saved value of 'order'. Is used when freeing the pages
-    unsigned long shared_memory; //The kernel addresses of the allocated pages on the offerrer
-    struct vm_struct *unmapped_area; //Virtual memeroy space allocated on the receiver
+    uint8_t pages_count;               //The total number of consecutive allocated pages (with the header page)
+    unsigned long shared_memory;       //The kernel addresses of the allocated pages on the offerrer
+    
+    unsigned int offerer_alloc_order;  //Offerer only: Saved value of 'order'. Is used when freeing the pages
+    
+    struct vm_struct *unmapped_area;  //Receiver only: Virtual memeroy space allocated on the receiver
 
+    
     /* Xen grant_table data */
     domid_t local_domid;    //The local domain id
-    domid_t distant_domid; //The distant domain id
-
-    grant_handle_t grant_map_handles[XEN_SHM_ALLOC_ALIGNED_PAGES]; //For the RECEIVER only. Contains an array with all the grant handles
-    grant_ref_t first_page_grant; //For the RECEIVER only. Contains the first page grant ref
+    domid_t distant_domid;  //The distant domain id
+    
+    grant_handle_t grant_map_handles[XEN_SHM_ALLOC_ALIGNED_PAGES]; //Receiver only: pages_count grant handles
+    grant_ref_t first_page_grant;                                  //Receiver only: first page grant reference
 
     /* Event channel data */
     evtchn_port_t local_ec_port; //The allocated event port number
@@ -174,16 +177,14 @@ struct xen_shm_meta_page_data {
      */
     grant_ref_t grant_refs[XEN_SHM_ALLOC_ALIGNED_PAGES];
 
-
-
 };
 
 /*
  * Other private function prototypes
  */
 static int __xen_shm_get_domid_hack(void);
-static void __xen_shm_free_shared_memory(struct xen_shm_instance_data* data);
-static int __xen_shm_allocate_shared_memory(struct xen_shm_instance_data* data);
+static void __xen_shm_free_shared_memory_offerer(struct xen_shm_instance_data* data);
+static int __xen_shm_allocate_shared_memory_offerer(struct xen_shm_instance_data* data);
 static int __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data, struct xen_shm_ioctlarg_offerer* arg);
 static int __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data, struct xen_shm_ioctlarg_receiver* arg);
 
@@ -356,6 +357,8 @@ xen_shm_open(struct inode * inode, struct file * filp)
     return 0;
 }
 
+
+
 /*
  * Called when all the processes possessing this file descriptor closed it.
  * All the allocated memory must be deallocated.
@@ -421,14 +424,14 @@ xen_shm_release(struct inode * inode, struct file * filp)
             /* Nothing to do here ! */
             break;
         case XEN_SHM_STATE_OFFERER:
-            __xen_shm_free_shared_memory(data);
+            __xen_shm_free_shared_memory_offerer(data);
             //TODO: Must only be done when other side ok
             break;
         case XEN_SHM_STATE_RECEIVER:
             free_vm_area(data->unmapped_area);
             break;
         case XEN_SHM_STATE_HALF_CLOSED:
-            __xen_shm_free_shared_memory(data);
+            __xen_shm_free_shared_memory_offerer(data);
              //TODO ?
             break;
         default:
@@ -460,7 +463,7 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
 }
 
 static int
-__xen_shm_allocate_shared_memory(struct xen_shm_instance_data* data)
+__xen_shm_allocate_shared_memory_offerer(struct xen_shm_instance_data* data)
 {
     uint32_t tmp_page_count;
     unsigned int order;
@@ -484,7 +487,7 @@ __xen_shm_allocate_shared_memory(struct xen_shm_instance_data* data)
         return -ENOMEM;
     }
 
-    data->alloc_order = order;
+    data->offerer_alloc_order = order;
     data->shared_memory = alloc;
 
     return 0;
@@ -493,10 +496,10 @@ __xen_shm_allocate_shared_memory(struct xen_shm_instance_data* data)
 
 
 static void
-__xen_shm_free_shared_memory(struct xen_shm_instance_data* data)
+__xen_shm_free_shared_memory_offerer(struct xen_shm_instance_data* data)
 {
     if (data->shared_memory != 0) {
-        free_pages(data->shared_memory, data->alloc_order);
+        free_pages(data->shared_memory, data->offerer_alloc_order);
     }
 }
 
@@ -529,7 +532,7 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
     /*
      * Allocating memory
      */
-    error = __xen_shm_allocate_shared_memory(data);
+    error = __xen_shm_allocate_shared_memory_offerer(data);
     if (error < 0) {
         return error;
     }
@@ -576,7 +579,7 @@ undo_grant:
     for (; page>=0; page--) {
         gnttab_end_foreign_access_ref(meta_page_p->grant_refs[page], 0);
     }
-    __xen_shm_free_shared_memory(data);
+    __xen_shm_free_shared_memory_offerer(data);
 
     return error;
 }
