@@ -536,6 +536,8 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
 
     char* page_pointer ;
     struct xen_shm_meta_page_data* meta_page_p;
+    
+    struct vm_struct *descriptor_area;
 
 
     if (data->state != XEN_SHM_STATE_OPENED) { /* Command is invalid in this state */
@@ -558,11 +560,18 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     /*
      * Allocating memory
      */
-    error = __xen_shm_allocate_shared_memory(data);
-    if (error != 0) {
-        return error;
+    //error = __xen_shm_allocate_shared_memory(data);
+    //if (error != 0) {
+    //    return error;
+    //}
+    descriptor_area = alloc_vm_area(data->pages_count*PAGE_SIZE);
+    if (descriptor_area == NULL) {
+        printk(KERN_WARNING "xen_shm: Cannot allocate vm area.",arg->pages_count );
+        return -ENOMEM;
     }
-
+    
+    data->shared_memory = (unsigned long) descriptor_area->addr;
+    
 
 
     /*
