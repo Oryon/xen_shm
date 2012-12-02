@@ -481,7 +481,6 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
 
     meta_page_p->pages_count = data->pages_count;
 
-
     /* Grant mapping and fill header page */
     page_pointer = (char*) data->shared_memory;
     for (page=0; page < data->pages_count; page++) {
@@ -495,6 +494,9 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
         page_pointer += PAGE_SIZE; //Go to next page
     }
 
+    //Set argument respond
+    arg->grant = meta_page_p->grant_refs[0];
+    printk(KERN_WARNING "xen_shm: first grant ref: %i\n", arg->grant);
 
     /* Open event channel and connect it to handler */
 
