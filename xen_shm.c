@@ -539,6 +539,7 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
 
     char* page_pointer ;
     struct xen_shm_meta_page_data* meta_page_p;
+    struct vm_struct *unmapped_area;
 
 
     if (data->state != XEN_SHM_STATE_OPENED) { /* Command is invalid in this state */
@@ -557,26 +558,20 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     data->first_page_grant = arg->grant;
     data->pages_count = arg->pages_count + 1;
 
-
     /*
-     * Allocating memory
+     * Allocating memory space
      */
-    error = __xen_shm_allocate_shared_memory(data);
-    if (error != 0) {
-        return error;
+    unmapped_area = alloc_vm_area(data->pages_count * PAGE_SIZE, NULL);
+    if (unmapped_area == NULL) {
+        printk(KERN_WARNING "xen_shm: Cannot allocate vm area.");
+        return -ENOMEM;
     }
-    
-
+    data->shared_memory = (unsigned long) unmapped_area->addr;
 
     /*
      * Finding the first page
      */
-    page = 0;
-    page_pointer = (char*) data->shared_memory;
-
-    /* Fill-up the ops data structure with all the necessary parameters */
-    //gnttab_set_map_op(&map_op, (unsigned long) page_pointer , GNTMAP_host_map, data->first_page_grant, data->distant_domid);
-    map_op.host_addr = (unsigned long) page_pointer;
+    map_op.host_addr = (unsigned long) unmapped_area->addr;
     map_op.flags = GNTMAP_host_map;
     map_op.ref = data->first_page_grant;
     map_op.dom = data->distant_domid;
@@ -586,7 +581,7 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
         error = -EFAULT;
         goto undo_alloc;
     }
-    
+
     if (map_op.status < 0) {
         printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed with error %i \n", map_op.status);
         error = -EINVAL;
@@ -594,9 +589,8 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     }
 
     data->grant_map_handles[0] = map_op.handle;
-    page++;
-    page_pointer+=PAGE_SIZE;
-
+    page = 1;
+    page_pointer = unmapped_area->addr + PAGE_SIZE;
 
     /*
      * Checking compatibility
@@ -609,13 +603,10 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
         goto undo_map;
     }
 
-
-
-
     /*
      * Mapping the other pages
      */
-    for (page = 1; page < data->pages_count; page++) {
+    for (; page < data->pages_count; ++page) {
         //gnttab_set_map_op(&map_op, (unsigned long) page_pointer, GNTMAP_host_map, meta_page_p->grant_refs[page], data->distant_domid);
         map_op.host_addr = (unsigned long) page_pointer;
         map_op.flags = GNTMAP_host_map;
@@ -625,20 +616,17 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
         if (HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, &map_op, 1)) {
             printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed");
             error = -EFAULT;
-            page_pointer+=PAGE_SIZE;
             goto undo_map;
         }
-        
+
         if (map_op.status < 0) {
             printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed with error %i \n", map_op.status);
             error = -EINVAL;
-            page_pointer+=PAGE_SIZE;
             goto undo_alloc;
         }
-        
-        data->grant_map_handles[page] = map_op.handle;
 
-        page_pointer+=PAGE_SIZE;
+        data->grant_map_handles[page] = map_op.handle;
+        page_pointer += PAGE_SIZE;
     }
 
     /*
@@ -659,7 +647,7 @@ undo_map:
     }
 
 undo_alloc:
-    free_pages(data->shared_memory, data->alloc_order);
+    free_vm_area(unmapped_area);
 
     return error;
 }
