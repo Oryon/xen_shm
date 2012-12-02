@@ -398,7 +398,7 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
      * Map the kernel's allocated memory into the user's space
      */
 
-    return 0;
+    return -ENOSYS;
 }
 
 static int __xen_shm_allocate_shared_memory(struct xen_shm_instance_data* data) {
