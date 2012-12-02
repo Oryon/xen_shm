@@ -150,8 +150,17 @@ struct xen_shm_instance_data {
     /* Event channel data */
     evtchn_port_t local_ec_port; //The allocated event port number
     evtchn_port_t dist_ec_port; //The allocated event port number
+    
+    /* Delayed memory next element */
+    struct xen_shm_instance_data* next_delayed;
 
 };
+
+/*
+ * Delayed free queue
+ */
+struct xen_shm_instance_data* delayed_free_queue = NULL;
+
 
 /*
  * The first page is used to share meta-data in a more efficient way
@@ -178,6 +187,8 @@ struct xen_shm_meta_page_data {
 
 };
 
+
+
 /*
  * Other private function prototypes
  */
@@ -190,6 +201,7 @@ static void __xen_shm_free_shared_memory_receiver(struct xen_shm_instance_data* 
 static void __xen_shm_free_shared_memory_offerer(struct xen_shm_instance_data* data);
 static int __xen_shm_prepare_free(struct xen_shm_instance_data* data);
 static void __xen_shm_add_delayed_free(struct xen_shm_instance_data* data);
+static void __xen_shm_free_delayed_queue();
 
 /*
  * Code :)
@@ -354,6 +366,7 @@ xen_shm_open(struct inode * inode, struct file * filp)
     instance_data->state = XEN_SHM_STATE_OPENED;
     instance_data->local_domid = xen_shm_domid;
     instance_data->shared_memory = 0;
+    instance_data->next_delayed = NULL;
 
     filp->private_data = (void *) instance_data;
 
@@ -423,6 +436,15 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data){
     
 }
 
+static void 
+__xen_shm_free_delayed_queue() {
+    struct xen_shm_instance_data* current;
+    struct xen_shm_instance_data* previous;
+    
+    
+    
+}
+
 
 /*
  * Called when all the processes possessing this file descriptor closed it.
@@ -469,7 +491,9 @@ xen_shm_release(struct inode * inode, struct file * filp)
  */
 static void
 __xen_shm_add_delayed_free(struct xen_shm_instance_data* data) {
-    printk(KERN_WARNING "xen_shm: Memory leak !\n");
+    printk(KERN_WARNING "xen_shm: Data cannot be free. Adding to queue. !\n");
+    data->next_delayed = delayed_free_queue;
+    delayed_free_queue = data->next_delayed;
 }
 
 /*
