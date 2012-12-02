@@ -455,6 +455,7 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
     }
 
     if (arg->pages_count == 0 || arg->pages_count > XEN_SHM_MAX_SHARED_PAGES) { /* Cannot allocate this amount of pages */
+        printk(KERN_WARNING "xen_shm: Pages count is out of bound (%i).",arg->pages_count );
         return -EINVAL;
     }
 
@@ -542,6 +543,7 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     }
 
     if (arg->pages_count == 0 || arg->pages_count > XEN_SHM_MAX_SHARED_PAGES) { /* Cannot allocate this amount of pages */
+        printk(KERN_WARNING "xen_shm: Pages count is out of bound (%i).",arg->pages_count );
         return -EINVAL;
     }
 
@@ -573,7 +575,7 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     gnttab_set_map_op(&grant_op, (unsigned long) page_pointer , GNTMAP_host_map, data->first_page_grant, data->distant_domid);
 
     if (HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, &grant_op, 1)) {
-        printk("[sop_shm_mapper] HYPERVISOR map grant ref failed");
+        printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed");
         error = -EFAULT;
         goto undo_alloc;
     }
@@ -589,6 +591,7 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
 
     if (data->pages_count != meta_page_p->pages_count ) { //Not the same number of pages on both sides
+        printk(KERN_WARNING "xen_shm: Pages count is incorrect. Locally %i VS %i distantly.",(int)data->pages_count, (int)meta_page_p->pages_count );
         error = -EINVAL;
         goto undo_map;
     }
@@ -604,7 +607,7 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
 
 
         if (HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, &grant_op, 1)) {
-            printk("[sop_shm_mapper] HYPERVISOR map grant ref failed");
+            printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed");
             error = -EFAULT;
             page_pointer+=PAGE_SIZE;
             goto undo_map;
