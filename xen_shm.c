@@ -84,6 +84,7 @@ static dev_t xen_shm_device = 0;
 static struct cdev xen_shm_cdev;
 #define XEN_SHM_DEV_COUNT 1
 
+
 /*
  * Module parameters
  * As we don't want to define the checkers for domid_t, let's say it's a ushort
@@ -462,7 +463,7 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
     /*
      * Completing file data
      */
-    data->distant_domid = arg->dist_domid;
+    data->distant_domid = (arg->dist_domid==DOMID_SELF)?data->local_domid:arg->dist_domid;
     data->pages_count = arg->pages_count + 1;
 
     /*
@@ -552,7 +553,7 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     /*
      * Completing file data
      */
-    data->distant_domid = arg->dist_domid;
+    data->distant_domid = (arg->dist_domid==DOMID_SELF)?data->local_domid:arg->dist_domid;
     data->first_page_grant = arg->grant;
     data->pages_count = arg->pages_count + 1;
 
@@ -586,8 +587,8 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
         goto undo_alloc;
     }
     
-    if (map_op->status < 0) {
-        printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed with error %i : %s\n", map_op->status, GNTTABOP_error_msgs[-map_op->status]);
+    if (map_op.status < 0) {
+        printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed with error %i \n", map_op.status);
         error = -EINVAL;
         goto undo_alloc;
     }
@@ -628,8 +629,8 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
             goto undo_map;
         }
         
-        if (map_op->status < 0) {
-            printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed with error %i : %s\n", map_op->status, GNTTABOP_error_msgs[-map_op->status]);
+        if (map_op.status < 0) {
+            printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed with error %i \n", map_op.status);
             error = -EINVAL;
             page_pointer+=PAGE_SIZE;
             goto undo_alloc;
