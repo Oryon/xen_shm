@@ -438,27 +438,27 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data){
 
 static void 
 __xen_shm_free_delayed_queue(void) {
-    struct xen_shm_instance_data* current;
+    struct xen_shm_instance_data* current_i;
     struct xen_shm_instance_data* previous;
     struct xen_shm_instance_data* to_delete;
     
     previous = NULL;
-    current = xen_shm_delayed_free_queue;
+    current_i = xen_shm_delayed_free_queue;
     
-    while (current != NULL) {
-        if (__xen_shm_prepare_free(current)==0) { //On peut supprimer
-            to_delete = current;
+    while (current_i != NULL) {
+        if (__xen_shm_prepare_free(current_i)==0) { //On peut supprimer
+            to_delete = current_i;
             if (previous == NULL) { //Premier élément de la liste
-                xen_shm_delayed_free_queue = current->next_delayed;
+                xen_shm_delayed_free_queue = current_i->next_delayed;
             } else {
-                previous->next_delayed = current->next_delayed;
+                previous->next_delayed = current_i->next_delayed;
             }
-            current = current->next_delayed; //Next
+            current_i = current_i->next_delayed; //Next
                 
             kfree(to_delete); 
         } else {
-            previous = current;
-            current = current->next_delayed;
+            previous = current_i;
+            current_i = current_i->next_delayed;
         }
     }
     
