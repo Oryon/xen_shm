@@ -30,8 +30,8 @@ clean(int sig)
 int
 main(int argc, char *argv[])
 {
-    const char* device_name;
     int retval;
+    domid_t target;
     struct xen_shm_ioctlarg_receiver init_receiver;
 
     if (argc > 2) {
@@ -39,13 +39,15 @@ main(int argc, char *argv[])
         return -1;
     }
     if (argc == 2) {
-        device_name = argv[1];
+        if(sscanf(argv[1], "%"SCNu16, &target) != 1) {
+            printf("Bad argument, need to be a domid_t\n");
+        }
     } else {
-        printf("No device given, using default : %s\n", default_device_name);
-        device_name = default_device_name;
+        printf("No destination domid set, defaulting to domid_self\n");
+        target = DOMID_SELF;
     }
 
-    fd = open(device_name, O_RDWR);
+    fd = open(default_device_name, O_RDWR);
     if (fd < 0) {
         perror("open device");
         return -1;
