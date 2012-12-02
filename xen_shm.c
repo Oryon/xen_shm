@@ -61,6 +61,11 @@
 #endif /* LINUX_VERSION_CODE ? KERNEL_VERSION(3, 0, 0) */
 
 
+
+#define DELAYED_FREE_ON_CLOSE 1  //Try to free delayed data when some descriptor is closed
+#define DELAYED_FREE_ON_OPEN  1  //Try to free delayed data when some descriptor is opened
+
+
 /*
  * The state of the shared memory
  */
@@ -143,9 +148,10 @@ struct xen_shm_instance_data {
     /* Xen grant_table data */
     domid_t local_domid;    //The local domain id
     domid_t distant_domid;  //The distant domain id
+    grant_ref_t first_page_grant;   //The first page grant reference
     
     grant_handle_t grant_map_handles[XEN_SHM_ALLOC_ALIGNED_PAGES]; //Receiver only: pages_count grant handles
-    grant_ref_t    first_page_grant;                               //Receiver only: first page grant reference
+    
 
     /* Event channel data */
     evtchn_port_t local_ec_port; //The allocated event port number
@@ -369,6 +375,11 @@ xen_shm_open(struct inode * inode, struct file * filp)
     instance_data->next_delayed = NULL;
 
     filp->private_data = (void *) instance_data;
+    
+    //Try to close other delayed close
+    if (DELAYED_FREE_ON_OPEN) {
+        __xen_shm_free_delayed_queue();
+    }
 
     return 0;
 }
@@ -385,6 +396,8 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data){
     
     meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
     
+    printk(KERN_WARNING "xen_shm: Try to prepare free (first grant %i)\n", data->first_page_grant);
+    
     /*
      * Xen grant table state must be restored (unmap on receiver side and end grant on offerer side)
      */
@@ -397,8 +410,8 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data){
                 if( gnttab_end_foreign_access_ref(meta_page_p->grant_refs[data->pages_count-1], 0) ) {
                     data->pages_count--;
                 } else {
-                    printk(KERN_WARNING "xen_shm: Grant ref %i still in use !\n", unmap_op.status);
-                    return -1;
+                    //printk(KERN_WARNING "xen_shm: Grant ref %i (from first grant %i) still in use !\n", meta_page_p->grant_refs[data->pages_count-1], data->first_page_grant);
+                    goto fail;
                 }
             }
             
@@ -416,8 +429,8 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data){
                 if(unmap_op.status == 0) {
                     data->pages_count--;
                 } else {
-                    printk(KERN_WARNING "xen_shm: Could not unmap a page in receiver mode (should not happen). Error:%i !\n", unmap_op.status);
-                    return -1;
+                    //printk(KERN_WARNING "xen_shm: Could not unmap a page in receiver mode (should not happen). Error:%i !\n", unmap_op.status);
+                    goto fail;
                 }
             }
             
@@ -432,7 +445,9 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data){
             break;
     }
     
-    
+fail:
+    printk(KERN_WARNING "xen_shm: Failed to prepare free (first grant %i)\n", data->first_page_grant);
+    return -1;
     
 }
 
@@ -501,6 +516,12 @@ xen_shm_release(struct inode * inode, struct file * filp)
     }
     
     kfree(filp->private_data); 
+    
+    //Try to close other delayed close
+    if (DELAYED_FREE_ON_CLOSE) {
+        __xen_shm_free_delayed_queue();
+    }
+    
 
     return 0;
 }
@@ -637,9 +658,12 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
 
         page_pointer += PAGE_SIZE; //Go to next page
     }
-
+    
     //Set argument respond
     arg->grant = meta_page_p->grant_refs[0];
+    
+    //Set first grant ref
+    data->first_page_grant = meta_page_p->grant_refs[0];
 
     /* Open event channel and connect it to handler */
 
