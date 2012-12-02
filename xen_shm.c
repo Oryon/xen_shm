@@ -550,6 +550,7 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
      */
     data->distant_domid = arg->dist_domid;
     data->first_page_grant = arg->grant;
+    data->pages_count = arg->pages_count + 1;
 
 
     /*
