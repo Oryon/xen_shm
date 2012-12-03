@@ -728,7 +728,7 @@ __xen_shm_open_ec_offerer(struct xen_shm_instance_data* data)
     /* Set handler on unbound channel */
     retval = bind_evtchn_to_irqhandler(data->local_ec_port,
                       xen_shm_event_handler,
-                      SA_INTERRUPT, "xen_shm",
+                      0, "xen_shm",
                       data);
     if(retval != 0) {
         close_op.port = data->local_ec_port;
@@ -762,7 +762,7 @@ __xen_shm_open_ec_receiver(struct xen_shm_instance_data* data)
     int retval =  bind_interdomain_evtchn_to_irqhandler(data->distant_domid,
                           data->dist_ec_port,
                           xen_shm_event_handler,
-                          SA_INTERRUPT,
+                          0,
                           "xen_shm",
                           data);
 
