@@ -900,7 +900,7 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
 
 
     /* Open event channel and connect it to handler */
-    if((error = __xen_shm_open_ec_offerer()) != 0) {
+    if((error = __xen_shm_open_ec_offerer(data)) != 0) {
     	goto undo_grant;
     }
 
