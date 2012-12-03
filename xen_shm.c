@@ -710,7 +710,7 @@ xen_shm_event_handler(int irq, void* arg)
 
     printk(KERN_WARNING "xen_shm: A signal has just been handled\n");
 
-    wake_up_interruptible(data->wait_queue);
+    wake_up_interruptible(&data->wait_queue);
 
     return IRQ_HANDLED; //Can also return IRQ_NONE or IRQ_WAKE_THREAD
 }
@@ -771,10 +771,11 @@ __xen_shm_open_ec_receiver(struct xen_shm_instance_data* data)
 {
     struct xen_shm_meta_page_data *meta_page_p;
     meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
+    int retval;
 
     data->dist_ec_port = meta_page_p->offerer_ec_port;
 
-    int retval =  bind_interdomain_evtchn_to_irqhandler(data->distant_domid,
+    retval =  bind_interdomain_evtchn_to_irqhandler(data->distant_domid,
                           data->dist_ec_port,
                           xen_shm_event_handler,
                           0,
