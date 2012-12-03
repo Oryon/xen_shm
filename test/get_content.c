@@ -43,13 +43,13 @@ main(int argc, char *argv[])
             printf("Bad argument, need to be a domid_t\n");
         }
     } else {
-        printf("No destination domid set, defaulting to domid_self\n");
+        printf("Receiver: No destination domid set, defaulting to domid_self\n");
         target = DOMID_SELF;
     }
 
     fd = open(default_device_name, O_RDWR);
     if (fd < 0) {
-        perror("open device");
+        perror("Receiver: open device");
         return -1;
     }
 
@@ -60,27 +60,28 @@ main(int argc, char *argv[])
 
     retval = ioctl(fd, XEN_SHM_IOCTL_INIT_RECEIVER, &init_receiver);
     if (retval != 0) {
-        perror("ioctl init receiver");
+        perror("Receiver: ioctl init");
     } else {
-        printf("Receiver initialisation success!\n");
+        printf("Receiver: initialisation success!\n");
     }
 
-    sleep(20);
+    sleep(2);
 
     mapped_addr = mmap(0, sizeof(unsigned int) * 5, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 
     if (mapped_addr == MAP_FAILED) {
-        perror("Unabme to map");
+        perror("Receiver: unable to map");
         close(fd);
         exit(-1);
     }
+    printf("Receiver: mmap success (%p)\n", mapped_addr);
 
     signal(SIGINT, clean);
 
     srand(1);
 
     while(1) {
-        sleep(10);
+        sleep(5);
         printf("Receiver read %d, %d\n", mapped_addr[2], mapped_addr[3]);
         mapped_addr[0] = rand();
         mapped_addr[1] = rand();

@@ -43,13 +43,13 @@ main(int argc, char *argv[])
             printf("Bad argument, need to be a domid_t\n");
         }
     } else {
-        printf("No destination domid set, defaulting to domid_self\n");
+        printf("Offerrer: No destination domid set, defaulting to domid_self\n");
         target = DOMID_SELF;
     }
 
     fd = open(default_device_name, O_RDWR);
     if (fd < 0) {
-        perror("open device");
+        perror("Offerrer: open device");
         return -1;
     }
 
@@ -58,28 +58,28 @@ main(int argc, char *argv[])
 
     retval = ioctl(fd, XEN_SHM_IOCTL_INIT_OFFERER, &init_offerer);
     if (retval != 0) {
-        perror("ioctl init offerer");
+        perror("Offerrer: ioctl init");
     } else {
-        printf("Offerer initialisation success: %"PRIu32"\n", init_offerer.grant);
+        printf("Offerer: initialisation success: %"PRIu32"\n", init_offerer.grant);
     }
 
-    sleep(20);
+    sleep(2);
 
     mapped_addr = mmap(0, sizeof(unsigned int) * 5, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 
     if (mapped_addr == MAP_FAILED) {
-        perror("Unabme to map");
+        perror("Offerrer: unable to map");
         close(fd);
         exit(-1);
     }
-    printf("Mmap success (%p)\n", mapped_addr);
+    printf("Offerrer: mmap success (%p)\n", mapped_addr);
 
     signal(SIGINT, clean);
 
     srand(2);
 
     while(1) {
-        sleep(10);
+        sleep(5);
         printf("Offerrer read %d, %d\n", mapped_addr[0], mapped_addr[1]);
         mapped_addr[2] = rand();
         mapped_addr[3] = rand();
