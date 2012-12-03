@@ -73,12 +73,13 @@
 /*
  * The state of the shared memory
  */
-typedef uint8_t xen_shm_state_t; //The state type used
 
-#define XEN_SHM_STATE_OPENED          0x01 //Freshly opened device, can move to offerer or receiver
-#define XEN_SHM_STATE_OFFERER         0x02 //Memory is allocated. Event pipe created.
-#define XEN_SHM_STATE_RECEIVER        0x03 //Memory is allocated and only_first page mapped. Pipe is connected.
-#define XEN_SHM_STATE_RECEIVER_MAPPED 0x04 //Memory is allocated and fully mapped. Pipe is connected.
+enum xen_shm_state_t {
+    XEN_SHM_STATE_OPENED,         /* Freshly opened device, can move to offerer or receiver */
+    XEN_SHM_STATE_OFFERER,        /* Memory is allocated. Event pipe created. */
+    XEN_SHM_STATE_RECEIVER,       /* Memory is allocated and only_first page mapped. Pipe is connected. */
+    XEN_SHM_STATE_RECEIVER_MAPPED /* Memory is allocated and fully mapped. Pipe is connected. */
+};
 
 typedef uint8_t xen_shm_meta_page_state;
 
@@ -138,7 +139,7 @@ const struct file_operations xen_shm_file_ops = {
  * have to be kept in order to "close later" in the case of a blocking offerer close.
  */
 struct xen_shm_instance_data {
-    xen_shm_state_t state; //The state of this instance
+    enum xen_shm_state_t state; //The state of this instance
 
 
     /* Pages info */
