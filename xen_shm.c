@@ -73,9 +73,10 @@
  */
 typedef uint8_t xen_shm_state_t; //The state type used
 
-#define XEN_SHM_STATE_OPENED        0x01 //Freshly opened device, can move to offerer or receiver
-#define XEN_SHM_STATE_OFFERER       0x02 //Memory is allocated. Event pipe created.
-#define XEN_SHM_STATE_RECEIVER      0x03 //Memory is allocated and mapped. Pipe is connected.
+#define XEN_SHM_STATE_OPENED          0x01 //Freshly opened device, can move to offerer or receiver
+#define XEN_SHM_STATE_OFFERER         0x02 //Memory is allocated. Event pipe created.
+#define XEN_SHM_STATE_RECEIVER        0x03 //Memory is allocated and only_first page mapped. Pipe is connected.
+#define XEN_SHM_STATE_RECEIVER_MAPPED 0x04 //Memory is allocated and fully mapped. Pipe is connected.
 
 typedef uint8_t xen_shm_meta_page_state;
 
@@ -423,10 +424,11 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data){
             __xen_shm_free_shared_memory_offerer(data);
             
             return 0;
-            
-        case XEN_SHM_STATE_RECEIVER:
-            //Try to unmap all entries
-            while (data->pages_count != 0) {
+
+
+        case XEN_SHM_STATE_RECEIVER_MAPPED:
+            //Try to unmap all entries, exepct the first one
+            while (data->pages_count > 0) {
                 gnttab_set_unmap_op(&unmap_op, ((unsigned long) data->shared_memory) + PAGE_SIZE * (data->pages_count-1), GNTMAP_host_map, data->grant_map_handles[data->pages_count - 1]);
                 HYPERVISOR_grant_table_op(GNTTABOP_unmap_grant_ref, &unmap_op, 1);
                 if(unmap_op.status == 0) {
@@ -436,11 +438,21 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data){
                     goto fail;
                 }
             }
-            
-            
+            // Continue ! (no break)
+        case XEN_SHM_STATE_RECEIVER:
+            // Unmap the first page
+            gnttab_set_unmap_op(&unmap_op, ((unsigned long) data->shared_memory), GNTMAP_host_map, data->grant_map_handles[0]);
+            HYPERVISOR_grant_table_op(GNTTABOP_unmap_grant_ref, &unmap_op, 1);
+            if(unmap_op.status == 0) {
+                data->pages_count--;
+            } else {
+                //printk(KERN_WARNING "xen_shm: Could not unmap a page in receiver mode (should not happen). Error:%i !\n", unmap_op.status);
+                goto fail;
+            }
+
             //Freeing memory
             __xen_shm_free_shared_memory_receiver(data);
-            
+
             return 0;
         default:
             printk(KERN_WARNING "xen_shm: Impossible state !\n");
@@ -572,6 +584,9 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
             }
             // Ok, map logical memory
             return remap_pfn_range(vma, vma->vm_start, virt_to_pfn(data->shared_memory + PAGE_SIZE), vma->vm_end - vma->vm_start, vma->vm_page_prot);
+        case XEN_SHM_STATE_RECEIVER_MAPPED:
+            // Too late
+            return -EPIPE;
         case XEN_SHM_STATE_RECEIVER:
             // Verify size
             if (vma->vm_end - vma->vm_start != (data->pages_count - 1) * PAGE_SIZE) {
@@ -625,6 +640,7 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
 
                 page_pointer += PAGE_SIZE;
             }
+            data->state = XEN_SHM_STATE_RECEIVER_MAPPED;
             return 0;
         default:
             printk(KERN_WARNING "xen_shm: Impossible state !\n");
