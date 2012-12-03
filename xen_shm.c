@@ -368,8 +368,9 @@ void __exit
 xen_shm_cleanup()
 {
     /*
-     * Needs to verify if no shared memory is open ??? (maybe the kernel close them before ?)
+     * Try to free delayed closes (at least :'()
      */
+    __xen_shm_free_delayed_queue();
 
     /*
      * Remove cdev
