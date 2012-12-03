@@ -448,6 +448,8 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data, bool first){
                 }
             }
 
+            //Closing event channel
+            __xen_shm_close_ec_offerer(data);
 
             //Freeing memory
             __xen_shm_free_shared_memory_offerer(data);
@@ -480,6 +482,9 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data, bool first){
                 }
                 goto fail;
             }
+
+            //Closing event channel
+            __xen_shm_close_ec_receiver(data);
 
             //Freeing memory
             __xen_shm_free_shared_memory_receiver(data);
@@ -770,8 +775,10 @@ static int
 __xen_shm_open_ec_receiver(struct xen_shm_instance_data* data)
 {
     struct xen_shm_meta_page_data *meta_page_p;
-    meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
     int retval;
+
+    meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
+
 
     data->dist_ec_port = meta_page_p->offerer_ec_port;
 
