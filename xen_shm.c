@@ -717,7 +717,9 @@ __xen_shm_free_shared_memory_offerer(struct xen_shm_instance_data* data)
 static void
 __xen_shm_free_shared_memory_receiver(struct xen_shm_instance_data* data)
 {
-    free_vm_area(data->unmapped_area);
+    if (data->unmapped_area != NULL) {
+      free_vm_area(data->unmapped_area);
+    }
 }
 
 
