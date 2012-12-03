@@ -155,6 +155,7 @@ struct xen_shm_instance_data {
     unsigned int offerer_alloc_order;  //Offerer only: Saved value of 'order'. Is used when freeing the pages
 
     struct vm_struct *unmapped_area;  //Receiver only: Virtual memeroy space allocated on the receiver
+    unsigned long user_mapped_memory;  //Receiver only: Address where the user have mapped the shared memory
 
 
     /* Xen grant_table data */
@@ -447,7 +448,7 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data, bool first){
         case XEN_SHM_STATE_RECEIVER_MAPPED:
             /* Try to unmap all user-mapped pages */
             while (data->pages_count > 1) {
-                gnttab_set_unmap_op(&unmap_op, ((unsigned long) data->shared_memory) + PAGE_SIZE * (data->pages_count - 1), GNTMAP_host_map, data->grant_map_handles[data->pages_count - 1]);
+                gnttab_set_unmap_op(&unmap_op, data->user_mapped_memory + PAGE_SIZE * (data->pages_count - 2), GNTMAP_host_map, data->grant_map_handles[data->pages_count - 1]);
                 HYPERVISOR_grant_table_op(GNTTABOP_unmap_grant_ref, &unmap_op, 1);
                 if (unmap_op.status == 0) {
                     data->pages_count--;
@@ -659,6 +660,7 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
 
                 page_pointer += PAGE_SIZE;
             }
+            data->user_mapped_memory = vma->vm_start;
             data->state = XEN_SHM_STATE_RECEIVER_MAPPED;
             return 0;
         default:
