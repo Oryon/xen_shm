@@ -38,7 +38,6 @@
 #include <linux/vmalloc.h>
 #include <xen/interface/xen.h>
 #include <xen/interface/event_channel.h>
-#include <asm/page.h>
 #include <xen/grant_table.h>
 #include <xen/page.h>
 
