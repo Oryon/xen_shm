@@ -797,7 +797,7 @@ __xen_shm_open_ec(struct xen_shm_instance_data* data, int offerer)
     if(retval <= 0) {
         close_op.port = data->local_ec_port;
         if(HYPERVISOR_event_channel_op(EVTCHNOP_close, &close_op)) {
-            printk(KERN_WARNING "xen_shm: Couldn't close event channel (state leak) \n", retval);
+            printk(KERN_WARNING "xen_shm: Couldn't close event channel (state leak) \n");
         }
         return -EIO;
     }
