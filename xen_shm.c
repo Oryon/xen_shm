@@ -228,7 +228,7 @@ static int __xen_shm_open_ec_receiver(struct xen_shm_instance_data* data);
 static int __xen_shm_close_ec_receiver(struct xen_shm_instance_data* data);
 
 //Closure
-static int __xen_shm_prepare_free(struct xen_shm_instance_data* data);
+static int __xen_shm_prepare_free(struct xen_shm_instance_data* data, bool first);
 static void __xen_shm_add_delayed_free(struct xen_shm_instance_data* data);
 #if (DELAYED_FREE_ON_CLOSE || DELAYED_FREE_ON_OPEN)
 static void  __xen_shm_free_delayed_queue(void);
@@ -415,14 +415,12 @@ xen_shm_open(struct inode * inode, struct file * filp)
  * Returns 0 if data can be safely forgot. A negative value if it cannot yet.
  */
 static int
-__xen_shm_prepare_free(struct xen_shm_instance_data* data){
+__xen_shm_prepare_free(struct xen_shm_instance_data* data, bool first){
 
     struct gnttab_unmap_grant_ref unmap_op;
     struct xen_shm_meta_page_data *meta_page_p;
 
     meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
-
-    printk(KERN_WARNING "xen_shm: Try to prepare free (first grant %i)\n", data->first_page_grant);
 
     /*
      * Xen grant table state must be restored (unmap on receiver side and end grant on offerer side)
@@ -433,7 +431,7 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data){
         case XEN_SHM_STATE_OFFERER:
             //Try to free data pages first
             while (data->pages_count != 0) {
-                if( gnttab_end_foreign_access_ref(meta_page_p->grant_refs[data->pages_count-1], 0) ) {
+                if (gnttab_end_foreign_access_ref(meta_page_p->grant_refs[data->pages_count-1], 0)) {
                     data->pages_count--;
                 } else {
                     //printk(KERN_WARNING "xen_shm: Grant ref %i (from first grant %i) still in use !\n", meta_page_p->grant_refs[data->pages_count-1], data->first_page_grant);
@@ -446,17 +444,17 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data){
             __xen_shm_free_shared_memory_offerer(data);
 
             return 0;
-
-
         case XEN_SHM_STATE_RECEIVER_MAPPED:
-            //Try to unmap all entries, exepct the first one
+            /* Try to unmap all user-mapped pages */
             while (data->pages_count > 0) {
-                gnttab_set_unmap_op(&unmap_op, ((unsigned long) data->shared_memory) + PAGE_SIZE * (data->pages_count-1), GNTMAP_host_map, data->grant_map_handles[data->pages_count - 1]);
+                gnttab_set_unmap_op(&unmap_op, ((unsigned long) data->shared_memory) + PAGE_SIZE * (data->pages_count - 1), GNTMAP_host_map, data->grant_map_handles[data->pages_count - 1]);
                 HYPERVISOR_grant_table_op(GNTTABOP_unmap_grant_ref, &unmap_op, 1);
-                if(unmap_op.status == 0) {
+                if (unmap_op.status == 0) {
                     data->pages_count--;
                 } else {
-                    //printk(KERN_WARNING "xen_shm: Could not unmap a page in receiver mode (should not happen). Error:%i !\n", unmap_op.status);
+                    if (first) {
+                        printk(KERN_WARNING "xen_shm: Could not unmap a 'user'-mapped page in receiver mode. Error:%i !\n", unmap_op.status);
+                    }
                     goto fail;
                 }
             }
@@ -468,7 +466,9 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data){
             if(unmap_op.status == 0) {
                 data->pages_count--;
             } else {
-                //printk(KERN_WARNING "xen_shm: Could not unmap a page in receiver mode (should not happen). Error:%i !\n", unmap_op.status);
+                if (first) {
+                    printk(KERN_WARNING "xen_shm: Could not unmap a page in receiver mode. Error:%i !\n", unmap_op.status);
+                }
                 goto fail;
             }
 
@@ -498,7 +498,7 @@ __xen_shm_free_delayed_queue(void) {
     current_i = xen_shm_delayed_free_queue;
 
     while (current_i != NULL) {
-        if (__xen_shm_prepare_free(current_i) == 0) { //On peut supprimer
+        if (__xen_shm_prepare_free(current_i, false) == 0) { //On peut supprimer
             to_delete = current_i;
             if (previous == NULL) { //Premier élément de la liste
                 xen_shm_delayed_free_queue = current_i->next_delayed;
@@ -545,7 +545,7 @@ xen_shm_release(struct inode * inode, struct file * filp)
     
     
     //Try to prepare the free
-    if (__xen_shm_prepare_free(data)) {
+    if (__xen_shm_prepare_free(data, true)) {
         __xen_shm_add_delayed_free(data);
         return 0;
     }
