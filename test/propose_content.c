@@ -76,6 +76,8 @@ main(int argc, char *argv[])
 
     signal(SIGINT, clean);
 
+    srand(2);
+
     while(1) {
         sleep(10);
         printf("Offerrer read %d, %d\n", mapped_addr[0], mapped_addr[1]);

@@ -77,6 +77,8 @@ main(int argc, char *argv[])
 
     signal(SIGINT, clean);
 
+    srand(1);
+
     while(1) {
         sleep(10);
         printf("Receiver read %d, %d\n", mapped_addr[2], mapped_addr[3]);
