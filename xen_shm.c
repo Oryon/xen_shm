@@ -151,24 +151,24 @@ struct xen_shm_instance_data {
     /* Pages info */
     uint8_t pages_count;               //The total number of consecutive allocated pages (with the header page)
     unsigned long shared_memory;       //The kernel addresses of the allocated pages on the offerrer
-    
+
     unsigned int offerer_alloc_order;  //Offerer only: Saved value of 'order'. Is used when freeing the pages
-    
+
     struct vm_struct *unmapped_area;  //Receiver only: Virtual memeroy space allocated on the receiver
 
-    
+
     /* Xen grant_table data */
     domid_t local_domid;    //The local domain id
     domid_t distant_domid;  //The distant domain id
     grant_ref_t first_page_grant;   //The first page grant reference
-    
+
     grant_handle_t grant_map_handles[XEN_SHM_ALLOC_ALIGNED_PAGES]; //Receiver only: pages_count grant handles
-    
+
 
     /* Event channel data */
     evtchn_port_t local_ec_port; //The allocated event port number
     evtchn_port_t dist_ec_port; //Receiver only: The allocated event port number
-    
+
     /* Delayed memory next element */
     struct xen_shm_instance_data* next_delayed;
 
@@ -416,14 +416,14 @@ xen_shm_open(struct inode * inode, struct file * filp)
  */
 static int
 __xen_shm_prepare_free(struct xen_shm_instance_data* data){
-    
+
     struct gnttab_unmap_grant_ref unmap_op;
     struct xen_shm_meta_page_data *meta_page_p;
-    
+
     meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
-    
+
     printk(KERN_WARNING "xen_shm: Try to prepare free (first grant %i)\n", data->first_page_grant);
-    
+
     /*
      * Xen grant table state must be restored (unmap on receiver side and end grant on offerer side)
      */
@@ -440,11 +440,11 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data){
                     goto fail;
                 }
             }
-            
-            
+
+
             //Freeing memory
             __xen_shm_free_shared_memory_offerer(data);
-            
+
             return 0;
 
 
@@ -481,11 +481,10 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data){
             return -2;
             break;
     }
-    
+
 fail:
     printk(KERN_WARNING "xen_shm: Failed to prepare free (first grant %i)\n", data->first_page_grant);
     return -1;
-    
 }
 
 #if (DELAYED_FREE_ON_CLOSE || DELAYED_FREE_ON_OPEN)
@@ -494,12 +493,12 @@ __xen_shm_free_delayed_queue(void) {
     struct xen_shm_instance_data* current_i;
     struct xen_shm_instance_data* previous;
     struct xen_shm_instance_data* to_delete;
-    
+
     previous = NULL;
     current_i = xen_shm_delayed_free_queue;
-    
+
     while (current_i != NULL) {
-        if (__xen_shm_prepare_free(current_i)==0) { //On peut supprimer
+        if (__xen_shm_prepare_free(current_i) == 0) { //On peut supprimer
             to_delete = current_i;
             if (previous == NULL) { //Premier élément de la liste
                 xen_shm_delayed_free_queue = current_i->next_delayed;
@@ -507,8 +506,8 @@ __xen_shm_free_delayed_queue(void) {
                 previous->next_delayed = current_i->next_delayed;
             }
             current_i = current_i->next_delayed; //Next
-                
-            kfree(to_delete); 
+
+            kfree(to_delete);
         } else {
             previous = current_i;
             current_i = current_i->next_delayed;
@@ -526,7 +525,7 @@ static int
 xen_shm_release(struct inode * inode, struct file * filp)
 {
     struct xen_shm_instance_data* data;
-    
+
     /*
      * Warning: Remember the OFFERER grants and ungrant the pages.
      *          The RECEIVER map and unmap the pages.
@@ -550,9 +549,9 @@ xen_shm_release(struct inode * inode, struct file * filp)
         __xen_shm_add_delayed_free(data);
         return 0;
     }
-    
-    kfree(filp->private_data); 
-    
+
+    kfree(filp->private_data);
+
 #if DELAYED_FREE_ON_CLOSE
     //Try to close other delayed close
     __xen_shm_free_delayed_queue();
@@ -890,10 +889,10 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
 
         page_pointer += PAGE_SIZE; //Go to next page
     }
-    
+
     //Set argument respond
     arg->grant = meta_page_p->grant_refs[0];
-    
+
     //Set first grant ref
     data->first_page_grant = meta_page_p->grant_refs[0];
 
