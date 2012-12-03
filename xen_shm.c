@@ -245,7 +245,9 @@ static void  __xen_shm_free_delayed_queue(void);
  * Code :)
  */
 
-static int __xen_shm_get_domid_hack(void) {
+static int
+__xen_shm_get_domid_hack(void)
+{
     int retval;
     /* Structs */
     struct evtchn_alloc_unbound alloc_unbound = {
@@ -426,8 +428,8 @@ xen_shm_open(struct inode * inode, struct file * filp)
  * Returns 0 if data can be safely forgot. A negative value if it cannot yet.
  */
 static int
-__xen_shm_prepare_free(struct xen_shm_instance_data* data, bool first){
-
+__xen_shm_prepare_free(struct xen_shm_instance_data* data, bool first)
+{
     struct gnttab_unmap_grant_ref unmap_op;
     struct xen_shm_meta_page_data *meta_page_p;
 
@@ -505,7 +507,8 @@ fail:
 
 #if (DELAYED_FREE_ON_CLOSE || DELAYED_FREE_ON_OPEN)
 static void
-__xen_shm_free_delayed_queue(void) {
+__xen_shm_free_delayed_queue(void)
+{
     struct xen_shm_instance_data* current_i;
     struct xen_shm_instance_data* previous;
     struct xen_shm_instance_data* to_delete;
@@ -582,7 +585,8 @@ xen_shm_release(struct inode * inode, struct file * filp)
  * Is called when a free cannot be done imidiatly. The data must be put in some queue and deleted later.
  */
 static void
-__xen_shm_add_delayed_free(struct xen_shm_instance_data* data) {
+__xen_shm_add_delayed_free(struct xen_shm_instance_data* data)
+{
     printk(KERN_WARNING "xen_shm: Data cannot be free. Adding to queue. !\n");
     data->next_delayed = xen_shm_delayed_free_queue;
     xen_shm_delayed_free_queue = data->next_delayed;
