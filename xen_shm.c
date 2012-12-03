@@ -1172,10 +1172,7 @@ xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
              */
 
             if(instance_data->state == XEN_SHM_STATE_OFFERER || instance_data->state == XEN_SHM_STATE_RECEIVER) {
-                retval = notify_remote_via_evtchn(instance_data->local_ec_port);
-                if (retval != 0) {
-                    return retval;
-                }
+                notify_remote_via_evtchn(instance_data->local_ec_port);
             } else {
                 /* Command is invalid in this state */
                 return -ENOTTY;

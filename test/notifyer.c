@@ -18,7 +18,7 @@
 
 static const char default_device_name[] = "/dev/xen_shm";
 
-static int *mapped_addr;
+
 static int fd;
 
 
@@ -63,7 +63,7 @@ main(int argc, char *argv[])
 
 
     while(1) {
-        sleep(rand()%10);
+        sleep((unsigned int) (1+rand()%10));
         retval = ioctl(fd, XEN_SHM_IOCTL_SSIG, 0);
         if (retval != 0) {
             perror("ioctl error");
