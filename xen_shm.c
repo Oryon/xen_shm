@@ -641,10 +641,7 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
             meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
             page_pointer = (char *)vma->vm_start;
             for (page = 1; page < data->pages_count; ++page) {
-                map_op.host_addr = (unsigned long) page_pointer;
-                map_op.flags = GNTMAP_host_map;
-                map_op.ref = meta_page_p->grant_refs[page];
-                map_op.dom = data->distant_domid;
+                gnttab_set_map_op(&map_op, (phys_addr_t) page_pointer , GNTMAP_host_map, meta_page_p->grant_refs[page], data->distant_domid);
 
                 if (HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, &map_op, 1)) {
                     printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed");
@@ -1014,10 +1011,7 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     /*
      * Finding the first page
      */
-    map_op.host_addr = (unsigned long) data->unmapped_area->addr;
-    map_op.flags = GNTMAP_host_map;
-    map_op.ref = data->first_page_grant;
-    map_op.dom = data->distant_domid;
+    gnttab_set_map_op(&map_op, (phys_addr_t) data->unmapped_area->addr, GNTMAP_host_map, data->first_page_grant, data->distant_domid);
 
     if (HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, &map_op, 1)) {
         printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed\n");
