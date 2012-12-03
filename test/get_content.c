@@ -80,8 +80,8 @@ main(int argc, char *argv[])
     while(1) {
         sleep(10);
         printf("Receiver read %d, %d\n", mapped_addr[2], mapped_addr[3]);
-        mapped_addr[2] = rand();
-        mapped_addr[3] = rand();
+        mapped_addr[0] = rand();
+        mapped_addr[1] = rand();
         printf("Receiver set %d, %d\n", mapped_addr[0], mapped_addr[1]);
     }
 
