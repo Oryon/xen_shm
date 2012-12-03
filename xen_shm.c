@@ -231,9 +231,12 @@ static void __xen_shm_free_shared_memory_offerer(struct xen_shm_instance_data* d
 
 //Event channel
 static int __xen_shm_open_ec_offerer(struct xen_shm_instance_data* data);
-static int __xen_shm_close_ec_offerer(struct xen_shm_instance_data* data);
 static int __xen_shm_open_ec_receiver(struct xen_shm_instance_data* data);
+static int __xen_shm_open_ec(struct xen_shm_instance_data* data, int offerer);
+
+static int __xen_shm_close_ec_offerer(struct xen_shm_instance_data* data);
 static int __xen_shm_close_ec_receiver(struct xen_shm_instance_data* data);
+static int __xen_shm_close_ec(struct xen_shm_instance_data* data);
 
 //Closure
 static int __xen_shm_prepare_free(struct xen_shm_instance_data* data, bool first);
@@ -729,94 +732,61 @@ xen_shm_event_handler(int irq, void* arg)
 static int
 __xen_shm_open_ec_offerer(struct xen_shm_instance_data* data)
 {
-    int retval;
-    struct evtchn_alloc_unbound alloc_unbound;
-    struct xen_shm_meta_page_data *meta_page_p;
-    struct evtchn_close close_op;
-
-    alloc_unbound.dom = DOMID_SELF;
-    alloc_unbound.remote_dom = (data->distant_domid == data->local_domid)?DOMID_SELF:data->distant_domid;
-
-    /* Open a unbound channel */
-    retval = HYPERVISOR_event_channel_op(EVTCHNOP_alloc_unbound, &alloc_unbound);
-    if (retval != 0) {
-        /* Something went wrong */
-        printk(KERN_WARNING "xen_shm: Unable to open an unbound channel (%i)\n", retval);
-        return -EIO;
-    }
-
-    data->local_ec_port = alloc_unbound.port;
-
-    //Set on the shared page
-    meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
-    meta_page_p->offerer_ec_port = alloc_unbound.port;
-
-    /* Set handler on unbound channel */
-    retval = bind_evtchn_to_irqhandler(data->local_ec_port,
-                      xen_shm_event_handler,
-                      0, "xen_shm",
-                      data);
-    if(retval <= 0) {
-        close_op.port = data->local_ec_port;
-        if(HYPERVISOR_event_channel_op(EVTCHNOP_close, &close_op)) {
-            printk(KERN_WARNING "xen_shm: Couldn't undo event channel alloc !! (%i)\n", retval);
-        }
-        return -EIO;
-    }
-    data->ec_irq = retval;
-
-
-    return 0;
+    return __xen_shm_open_ec(data, 1);
 }
 
-static int
-__xen_shm_close_ec_offerer(struct xen_shm_instance_data* data)
-{
-
-    unbind_from_irqhandler(data->ec_irq, data); //Also close the channel
-
-    return 0;
-}
 
 static int
 __xen_shm_open_ec_receiver(struct xen_shm_instance_data* data)
 {
-
-    struct evtchn_bind_interdomain bind_op;
+    /* Read the distant port from the meta page */
     struct xen_shm_meta_page_data *meta_page_p;
-    struct evtchn_close close_op;
-    int retval;
-
     meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
     data->dist_ec_port = meta_page_p->offerer_ec_port;
 
-    bind_op.remote_dom = data->distant_domid;
-    bind_op.remote_port = data->dist_ec_port;
+    return __xen_shm_open_ec( data, 0);
+}
 
-    /* Open bound channel */
-    retval = HYPERVISOR_event_channel_op(EVTCHNOP_bind_interdomain, &bind_op);
-    if (retval != 0) {
-        /* Something went wrong */
-        printk(KERN_WARNING "xen_shm: Unable to open a bound channel (%i)\n", retval);
-        return -EIO;
+static int
+__xen_shm_open_ec(struct xen_shm_instance_data* data, int offerer)
+{
+    int retval;
+    struct evtchn_alloc_unbound alloc_unbound;
+    struct evtchn_bind_interdomain bind_op;
+    struct evtchn_close close_op;
+
+    if(offerer) { //Offerer case
+        alloc_unbound.dom = DOMID_SELF;
+        alloc_unbound.remote_dom = (data->distant_domid == data->local_domid)?DOMID_SELF:data->distant_domid;
+
+        /* Open a unbound channel */
+        if(HYPERVISOR_event_channel_op(EVTCHNOP_alloc_unbound, &alloc_unbound)) {
+            return -EIO;
+        }
+
+        data->local_ec_port = alloc_unbound.port;
+
+    } else { //Receiver case
+        bind_op.remote_dom = data->distant_domid;
+        bind_op.remote_port = data->dist_ec_port;
+
+        if(HYPERVISOR_event_channel_op(EVTCHNOP_bind_interdomain, &bind_op)) {
+            return -EIO;
+        }
+
+        data->local_ec_port = bind_op.local_port;
     }
 
-    data->local_ec_port = bind_op.local_port;
-
     /* Set handler on unbound channel */
-    retval = bind_evtchn_to_irqhandler(data->local_ec_port,
-            xen_shm_event_handler,
-            0, "xen_shm",
-            data);
+    retval = bind_evtchn_to_irqhandler(data->local_ec_port, xen_shm_event_handler, 0, "xen_shm", data);
     if(retval <= 0) {
         close_op.port = data->local_ec_port;
         if(HYPERVISOR_event_channel_op(EVTCHNOP_close, &close_op)) {
-            printk(KERN_WARNING "xen_shm: Couldn't undo event channel alloc !! (%i)\n", retval);
+            printk(KERN_WARNING "xen_shm: Couldn't close event channel (state leak) \n", retval);
         }
         return -EIO;
     }
     data->ec_irq = retval;
-
 
     return 0;
 }
@@ -825,11 +795,23 @@ __xen_shm_open_ec_receiver(struct xen_shm_instance_data* data)
 static int
 __xen_shm_close_ec_receiver(struct xen_shm_instance_data* data)
 {
+    return __xen_shm_close_ec(data);
+}
 
-    unbind_from_irqhandler(data->ec_irq, data);
 
+static int
+__xen_shm_close_ec_offerer(struct xen_shm_instance_data* data)
+{
+    return __xen_shm_close_ec(data);
+}
+
+static int
+__xen_shm_close_ec(struct xen_shm_instance_data* data)
+{
+    unbind_from_irqhandler(data->ec_irq, data); //Also close the channel
     return 0;
 }
+
 
 static int
 __xen_shm_allocate_shared_memory_offerer(struct xen_shm_instance_data* data)
