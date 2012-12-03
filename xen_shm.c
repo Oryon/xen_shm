@@ -754,8 +754,8 @@ __xen_shm_open_ec_offerer(struct xen_shm_instance_data* data)
         close_op.port = data->local_ec_port;
         if(HYPERVISOR_event_channel_op(EVTCHNOP_close, &close_op)) {
             printk(KERN_WARNING "xen_shm: Couldn't undo event channel alloc !! (%i)\n", retval);
-            return -EIO;
         }
+        return -EIO;
     }
 
 
@@ -774,27 +774,42 @@ __xen_shm_close_ec_offerer(struct xen_shm_instance_data* data)
 static int
 __xen_shm_open_ec_receiver(struct xen_shm_instance_data* data)
 {
+
+    struct evtchn_bind_interdomain bind_op;
     struct xen_shm_meta_page_data *meta_page_p;
+    struct evtchn_close close_op;
     int retval;
 
     meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
-
-
     data->dist_ec_port = meta_page_p->offerer_ec_port;
 
-    retval =  bind_interdomain_evtchn_to_irqhandler(data->distant_domid,
-                          data->dist_ec_port,
-                          xen_shm_event_handler,
-                          0,
-                          "xen_shm",
-                          data);
+    bind_op.remote_dom = data->distant_domid;
+    bind_op.remote_port = data->dist_ec_port;
 
-    if(retval < 0) {
-        printk(KERN_WARNING "xen_shm: Could not bind event channel to dist port (%i)\n", data->dist_ec_port);
+    /* Open bound channel */
+    retval = HYPERVISOR_event_channel_op(EVTCHNOP_bind_interdomain, &bind_op);
+    if (retval != 0) {
+        /* Something went wrong */
+        printk(KERN_WARNING "xen_shm: Unable to open a bound channel (%i)\n", retval);
         return -EIO;
     }
 
-    data->local_ec_port = retval;
+    data->local_ec_port = bind_op.local_port;
+
+    /* Set handler on unbound channel */
+    retval = bind_evtchn_to_irqhandler(data->local_ec_port,
+            xen_shm_event_handler,
+            0, "xen_shm",
+            data);
+    if(retval != 0) {
+        close_op.port = data->local_ec_port;
+        if(HYPERVISOR_event_channel_op(EVTCHNOP_close, &close_op)) {
+            printk(KERN_WARNING "xen_shm: Couldn't undo event channel alloc !! (%i)\n", retval);
+        }
+        return -EIO;
+    }
+
+
 
     return 0;
 }
