@@ -64,11 +64,17 @@
 # define XEN_SHM_ALLOC_VM_AREA(x) alloc_vm_area(x, NULL)
 #endif /* LINUX_VERSION_CODE ? KERNEL_VERSION(3, 0, 0) */
 
+/*
+ * Options : try to free delayed data on close/open ?
+ */
 
+#ifndef DELAYED_FREE_ON_CLOSE
+# define DELAYED_FREE_ON_CLOSE 1  //Try to free delayed data when some descriptor is closed
+#endif /* DELAYED_FREE_ON_CLOSE */
 
-#define DELAYED_FREE_ON_CLOSE 1  //Try to free delayed data when some descriptor is closed
-#define DELAYED_FREE_ON_OPEN  1  //Try to free delayed data when some descriptor is opened
-
+#ifndef DELAYED_FREE_ON_OPEN
+# define DELAYED_FREE_ON_OPEN  1  //Try to free delayed data when some descriptor is opened
+#endif /* DELAYED_FREE_ON_OPEN */
 
 /*
  * The state of the shared memory
@@ -224,7 +230,9 @@ static int __xen_shm_close_ec_receiver(struct xen_shm_instance_data* data);
 //Closure
 static int __xen_shm_prepare_free(struct xen_shm_instance_data* data);
 static void __xen_shm_add_delayed_free(struct xen_shm_instance_data* data);
-static void __xen_shm_free_delayed_queue(void);
+#if (DELAYED_FREE_ON_CLOSE || DELAYED_FREE_ON_OPEN)
+static void  __xen_shm_free_delayed_queue(void);
+#endif /* (DELAYED_FREE_ON_CLOSE || DELAYED_FREE_ON_OPEN)*/
 
 /*
  * Code :)
@@ -393,11 +401,11 @@ xen_shm_open(struct inode * inode, struct file * filp)
     instance_data->unmapped_area = NULL;
 
     filp->private_data = (void *) instance_data;
-    
+
+#if DELAYED_FREE_ON_OPEN
     //Try to close other delayed close
-    if (DELAYED_FREE_ON_OPEN) {
-        __xen_shm_free_delayed_queue();
-    }
+    __xen_shm_free_delayed_queue();
+#endif /* DELAYED_FREE_ON_OPEN */
 
     return 0;
 }
@@ -480,7 +488,8 @@ fail:
     
 }
 
-static void 
+#if (DELAYED_FREE_ON_CLOSE || DELAYED_FREE_ON_OPEN)
+static void
 __xen_shm_free_delayed_queue(void) {
     struct xen_shm_instance_data* current_i;
     struct xen_shm_instance_data* previous;
@@ -505,10 +514,8 @@ __xen_shm_free_delayed_queue(void) {
             current_i = current_i->next_delayed;
         }
     }
-    
-    
 }
-
+#endif /* (DELAYED_FREE_ON_CLOSE || DELAYED_FREE_ON_OPEN) */
 
 /*
  * Called when all the processes possessing this file descriptor closed it.
@@ -546,11 +553,10 @@ xen_shm_release(struct inode * inode, struct file * filp)
     
     kfree(filp->private_data); 
     
+#if DELAYED_FREE_ON_CLOSE
     //Try to close other delayed close
-    if (DELAYED_FREE_ON_CLOSE) {
-        __xen_shm_free_delayed_queue();
-    }
-    
+    __xen_shm_free_delayed_queue();
+#endif /* DELAYED_FREE_ON_CLOSE */
 
     return 0;
 }
