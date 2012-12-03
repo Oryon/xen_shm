@@ -1117,7 +1117,12 @@ xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
              * Waits until a signal is received through the signal channel
              */
 
-            //TODO
+            if(instance_data->state == XEN_SHM_STATE_OFFERER || instance_data->state == XEN_SHM_STATE_RECEIVER) {
+                notify_remote_via_evtchn(instance_data->local_ec_port);
+            } else {
+                /* Command is invalid in this state */
+                return -ENOTTY;
+            }
 
             break;
         case XEN_SHM_IOCTL_GET_DOMID:
