@@ -1156,7 +1156,10 @@ xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
              * Waits until a signal is received through the signal channel
              */
             if(instance_data->state == XEN_SHM_STATE_OFFERER || instance_data->state == XEN_SHM_STATE_RECEIVER) {
-                wait_event_interruptible(instance_data->wait_queue, 1 );
+                retval = wait_event_interruptible(instance_data->wait_queue, 1 );
+                if (retval != 0) {
+                    return retval;
+                }
             } else {
                 /* Command is invalid in this state */
                 return -ENOTTY;
@@ -1169,7 +1172,10 @@ xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
              */
 
             if(instance_data->state == XEN_SHM_STATE_OFFERER || instance_data->state == XEN_SHM_STATE_RECEIVER) {
-                notify_remote_via_evtchn(instance_data->local_ec_port);
+                retval = notify_remote_via_evtchn(instance_data->local_ec_port);
+                if (retval != 0) {
+                    return retval;
+                }
             } else {
                 /* Command is invalid in this state */
                 return -ENOTTY;
