@@ -24,6 +24,7 @@
  * Headers for file system implementation
  */
 #include <asm/page.h>
+#include <asm/signal.h>
 #include <asm/xen/hypercall.h>
 #include <linux/cdev.h>
 #include <linux/fs.h>
@@ -38,6 +39,7 @@
 #include <linux/vmalloc.h>
 #include <xen/interface/xen.h>
 #include <xen/interface/event_channel.h>
+#include <xen/events.h>
 #include <xen/grant_table.h>
 #include <xen/page.h>
 
@@ -158,7 +160,7 @@ struct xen_shm_instance_data {
 
     /* Event channel data */
     evtchn_port_t local_ec_port; //The allocated event port number
-    evtchn_port_t dist_ec_port; //The allocated event port number
+    evtchn_port_t dist_ec_port; //Receiver only: The allocated event port number
     
     /* Delayed memory next element */
     struct xen_shm_instance_data* next_delayed;
@@ -202,12 +204,23 @@ struct xen_shm_meta_page_data {
  * Other private function prototypes
  */
 static int __xen_shm_get_domid_hack(void);
-static void __xen_shm_free_shared_memory_offerer(struct xen_shm_instance_data* data);
-static int __xen_shm_allocate_shared_memory_offerer(struct xen_shm_instance_data* data);
+
+//ioctl calls
 static int __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data, struct xen_shm_ioctlarg_offerer* arg);
 static int __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data, struct xen_shm_ioctlarg_receiver* arg);
+
+//Shared memory
 static void __xen_shm_free_shared_memory_receiver(struct xen_shm_instance_data* data);
+static int __xen_shm_allocate_shared_memory_offerer(struct xen_shm_instance_data* data);
 static void __xen_shm_free_shared_memory_offerer(struct xen_shm_instance_data* data);
+
+//Event channel
+static int __xen_shm_open_ec_offerer(struct xen_shm_instance_data* data);
+static int __xen_shm_close_ec_offerer(struct xen_shm_instance_data* data);
+static int __xen_shm_open_ec_receiver(struct xen_shm_instance_data* data);
+static int __xen_shm_close_ec_receiver(struct xen_shm_instance_data* data);
+
+//Closure
 static int __xen_shm_prepare_free(struct xen_shm_instance_data* data);
 static void __xen_shm_add_delayed_free(struct xen_shm_instance_data* data);
 static void __xen_shm_free_delayed_queue(void);
@@ -672,6 +685,99 @@ clean:
     return -EFAULT;
 }
 
+static irqreturn_t
+xen_shm_event_handler(int irq, void* arg)
+{
+    printk(KERN_WARNING "xen_shm: A signal has just been handled\n");
+    return IRQ_HANDLED; //Can also return IRQ_NONE or IRQ_WAKE_THREAD
+}
+
+static int
+__xen_shm_open_ec_offerer(struct xen_shm_instance_data* data)
+{
+    int retval;
+    struct evtchn_alloc_unbound alloc_unbound;
+    struct xen_shm_meta_page_data *meta_page_p;
+    struct evtchn_close close_op;
+
+    alloc_unbound.dom = DOMID_SELF;
+    alloc_unbound.remote_dom = (data->distant_domid == data->local_domid)?DOMID_SELF:data->distant_domid;
+
+    /* Open a unbound channel */
+    retval = HYPERVISOR_event_channel_op(EVTCHNOP_alloc_unbound, &alloc_unbound);
+    if (retval != 0) {
+        /* Something went wrong */
+        printk(KERN_WARNING "xen_shm: Unable to open an unbound channel (%i)\n", retval);
+        return -EIO;
+    }
+
+    data->local_ec_port = alloc_unbound.port;
+
+    //Set on the shared page
+    meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
+    meta_page_p->offerer_ec_port = alloc_unbound.port;
+
+    /* Set handler on unbound channel */
+    retval = bind_evtchn_to_irqhandler(data->local_ec_port,
+                      xen_shm_event_handler,
+                      SA_INTERRUPT, "xen_shm",
+                      data);
+    if(retval != 0) {
+        close_op.port = data->local_ec_port;
+        if(HYPERVISOR_event_channel_op(EVTCHNOP_close, &close_op)) {
+            printk(KERN_WARNING "xen_shm: Couldn't undo event channel alloc !! (%i)\n", retval);
+            return -EIO;
+        }
+    }
+
+
+    return 0;
+}
+
+static int
+__xen_shm_close_ec_offerer(struct xen_shm_instance_data* data)
+{
+
+    unbind_from_irqhandler(data->local_ec_port, data); //Also close the channel
+
+    return 0;
+}
+
+static int
+__xen_shm_open_ec_receiver(struct xen_shm_instance_data* data)
+{
+    struct xen_shm_meta_page_data *meta_page_p;
+    meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
+
+    data->dist_ec_port = meta_page_p->offerer_ec_port;
+
+    int retval =  bind_interdomain_evtchn_to_irqhandler(data->distant_domid,
+                          data->dist_ec_port,
+                          xen_shm_event_handler,
+                          SA_INTERRUPT,
+                          "xen_shm",
+                          data);
+
+    if(retval < 0) {
+        printk(KERN_WARNING "xen_shm: Could not bind event channel to dist port (%i)\n", data->dist_ec_port);
+        return -EIO;
+    }
+
+    data->local_ec_port = retval;
+
+    return 0;
+}
+
+
+static int
+__xen_shm_close_ec_receiver(struct xen_shm_instance_data* data)
+{
+
+    unbind_from_irqhandler(data->local_ec_port, data);
+
+    return 0;
+}
+
 static int
 __xen_shm_allocate_shared_memory_offerer(struct xen_shm_instance_data* data)
 {
@@ -784,12 +890,11 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
     //Set first grant ref
     data->first_page_grant = meta_page_p->grant_refs[0];
 
+
     /* Open event channel and connect it to handler */
-
-
-    //TODO
-
-
+    if((error = __xen_shm_open_ec_offerer()) != 0) {
+    	goto undo_grant;
+    }
 
 
     /* If OK, states are changed*/
@@ -798,12 +903,14 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
 
     return 0;
 
+
 undo_grant:
     page--;
     for (; page>=0; page--) {
         gnttab_end_foreign_access_ref(meta_page_p->grant_refs[page], 0);
     }
     __xen_shm_free_shared_memory_offerer(data);
+
 
     return error;
 }
@@ -886,8 +993,12 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     /*
      * Connecting the event channel
      */
+    /* Open event channel and connect it to handler */
+    if((error = __xen_shm_open_ec_receiver(data)) != 0) {
+        goto undo_map;
+    }
 
-    //TODO
+
 
     /* If OK, states are changed*/
     data->state = XEN_SHM_STATE_RECEIVER;
