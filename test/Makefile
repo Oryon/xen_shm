@@ -6,7 +6,6 @@ CFLAGS?=-pipe -O2 -g -Wall -Wextra -Werror \
         -Wformat-nonliteral \
         -Wformat-security \
         -Winit-self \
-        -Wlogical-op \
         -Wmissing-declarations \
         -Wmissing-include-dirs \
         -Wmissing-format-attribute \
