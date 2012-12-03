@@ -521,7 +521,7 @@ __xen_shm_free_delayed_queue(void) {
                 previous->next_delayed = current_i->next_delayed;
             }
             current_i = current_i->next_delayed; //Next
-
+            printk(KERN_WARNING "xen_shm: Finally freeing instance (%i) from the queue\n", data->first_page_grant);
             kfree(to_delete);
         } else {
             previous = current_i;
