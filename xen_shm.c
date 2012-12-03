@@ -446,7 +446,7 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data, bool first){
             return 0;
         case XEN_SHM_STATE_RECEIVER_MAPPED:
             /* Try to unmap all user-mapped pages */
-            while (data->pages_count > 0) {
+            while (data->pages_count > 1) {
                 gnttab_set_unmap_op(&unmap_op, ((unsigned long) data->shared_memory) + PAGE_SIZE * (data->pages_count - 1), GNTMAP_host_map, data->grant_map_handles[data->pages_count - 1]);
                 HYPERVISOR_grant_table_op(GNTTABOP_unmap_grant_ref, &unmap_op, 1);
                 if (unmap_op.status == 0) {
