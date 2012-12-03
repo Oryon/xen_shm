@@ -550,7 +550,7 @@ static int
 xen_shm_release(struct inode * inode, struct file * filp)
 {
     struct xen_shm_instance_data* data;
-
+    struct xen_shm_meta_page_data* meta_page_p;
     /*
      * Warning: Remember the OFFERER grants and ungrant the pages.
      *          The RECEIVER map and unmap the pages.
@@ -564,11 +564,26 @@ xen_shm_release(struct inode * inode, struct file * filp)
 
     data = (struct xen_shm_instance_data*) filp->private_data;
     
-    //Close the event channel
-    //TODO...
     
-    
-    
+    switch (data->state) {
+    case XEN_SHM_STATE_OPENED:
+
+        break;
+    case XEN_SHM_STATE_OFFERER:
+        meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
+        meta_page_p->offerer_state = XEN_SHM_META_PAGE_STATE_CLOSED;
+        break;
+    case XEN_SHM_STATE_RECEIVER:
+    case XEN_SHM_STATE_RECEIVER_MAPPED:
+        meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
+        meta_page_p->receiver_state = XEN_SHM_META_PAGE_STATE_CLOSED;
+        break;
+    default:
+        printk(KERN_WARNING "xen_shm: Impossibulu staytu !\n");
+        return -2;
+        break;
+    }
+
     //Try to prepare the free
     if (__xen_shm_prepare_free(data, true)) {
         __xen_shm_add_delayed_free(data);
