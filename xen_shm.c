@@ -178,7 +178,8 @@ struct xen_shm_instance_data {
     /* Wait queue for the event channel */
     wait_queue_head_t wait_queue;
     unsigned int ec_irq;
-    uint8_t wake_up;
+    uint8_t wake_up_handler;
+    uint8_t wake_up_waiter;
 
 };
 
@@ -410,7 +411,8 @@ xen_shm_open(struct inode * inode, struct file * filp)
     instance_data->shared_memory = 0;
     instance_data->next_delayed = NULL;
     instance_data->unmapped_area = NULL;
-    instance_data->wake_up = 0;
+    instance_data->wake_up_handler = 1;
+    instance_data->wake_up_waiter = 1;
 
     filp->private_data = (void *) instance_data;
 
@@ -723,9 +725,8 @@ xen_shm_event_handler(int irq, void* arg)
     data = (struct xen_shm_instance_data*) arg;
 
     printk(KERN_WARNING "xen_shm: A signal has just been handled\n");
-    data->wake_up = 1;
+    data->wake_up_handler = 1 - data->wake_up_handler;
     wake_up_interruptible(&data->wait_queue);
-    data->wake_up = 0;
 
     return IRQ_HANDLED; //Can also return IRQ_NONE or IRQ_WAKE_THREAD
 }
@@ -1159,7 +1160,8 @@ xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
              * Waits until a signal is received through the signal channel
              */
             if(instance_data->state == XEN_SHM_STATE_OFFERER || instance_data->state == XEN_SHM_STATE_RECEIVER) {
-                retval = wait_event_interruptible(instance_data->wait_queue, instance_data->wake_up );
+                instance_data->wake_up_waiter = 1 - instance_data->wake_up_handler; //Prepare the condition
+                retval = wait_event_interruptible(instance_data->wait_queue, instance_data->wake_up_handler == instance_data->wake_up_waiter );
                 if (retval != 0) {
                     return retval;
                 }
