@@ -177,6 +177,7 @@ struct xen_shm_instance_data {
 
     /* Wait queue for the event channel */
     wait_queue_head_t wait_queue;
+    unsigned int ec_irq;
 
 };
 
@@ -750,13 +751,14 @@ __xen_shm_open_ec_offerer(struct xen_shm_instance_data* data)
                       xen_shm_event_handler,
                       0, "xen_shm",
                       data);
-    if(retval != 0) {
+    if(retval <= 0) {
         close_op.port = data->local_ec_port;
         if(HYPERVISOR_event_channel_op(EVTCHNOP_close, &close_op)) {
             printk(KERN_WARNING "xen_shm: Couldn't undo event channel alloc !! (%i)\n", retval);
         }
         return -EIO;
     }
+    data->ec_irq = retval;
 
 
     return 0;
@@ -766,7 +768,7 @@ static int
 __xen_shm_close_ec_offerer(struct xen_shm_instance_data* data)
 {
 
-    unbind_from_irqhandler(data->local_ec_port, data); //Also close the channel
+    unbind_from_irqhandler(data->ec_irq, data); //Also close the channel
 
     return 0;
 }
@@ -801,14 +803,14 @@ __xen_shm_open_ec_receiver(struct xen_shm_instance_data* data)
             xen_shm_event_handler,
             0, "xen_shm",
             data);
-    if(retval != 0) {
+    if(retval <= 0) {
         close_op.port = data->local_ec_port;
         if(HYPERVISOR_event_channel_op(EVTCHNOP_close, &close_op)) {
             printk(KERN_WARNING "xen_shm: Couldn't undo event channel alloc !! (%i)\n", retval);
         }
         return -EIO;
     }
-
+    data->ec_irq = retval;
 
 
     return 0;
@@ -819,7 +821,7 @@ static int
 __xen_shm_close_ec_receiver(struct xen_shm_instance_data* data)
 {
 
-    unbind_from_irqhandler(data->local_ec_port, data);
+    unbind_from_irqhandler(data->ec_irq, data);
 
     return 0;
 }
