@@ -7,3 +7,5 @@
 .tmp_versions
 Module.symvers
 modules.order
+.project
+.cproject
