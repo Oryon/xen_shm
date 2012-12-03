@@ -37,6 +37,7 @@
 #include <linux/uaccess.h>
 #include <linux/version.h>
 #include <linux/vmalloc.h>
+#include <linux/wait.h>
 #include <xen/interface/xen.h>
 #include <xen/interface/event_channel.h>
 #include <xen/events.h>
@@ -172,6 +173,9 @@ struct xen_shm_instance_data {
 
     /* Delayed memory next element */
     struct xen_shm_instance_data* next_delayed;
+
+    /* Wait queue for the event channel */
+    wait_queue_head_t wait_queue;
 
 };
 
@@ -407,6 +411,9 @@ xen_shm_open(struct inode * inode, struct file * filp)
     //Try to close other delayed close
     __xen_shm_free_delayed_queue();
 #endif /* DELAYED_FREE_ON_OPEN */
+
+    /* Init the wait queue */
+    init_waitqueue_head(&instance_data->wait_queue);
 
     return 0;
 }
@@ -696,7 +703,12 @@ clean:
 static irqreturn_t
 xen_shm_event_handler(int irq, void* arg)
 {
+    struct xen_shm_instance_data* data = (struct xen_shm_instance_data*) arg;
+
     printk(KERN_WARNING "xen_shm: A signal has just been handled\n");
+
+    wake_up_interruptible (data->wait_queue);
+
     return IRQ_HANDLED; //Can also return IRQ_NONE or IRQ_WAKE_THREAD
 }
 
@@ -1105,16 +1117,21 @@ xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
             break;
         case XEN_SHM_IOCTL_WAIT:
-            /*
-             * Immediatly sends a signal through the signal channel
-             */
 
-            //TODO
+            /*
+             * Waits until a signal is received through the signal channel
+             */
+            if(instance_data->state == XEN_SHM_STATE_OFFERER || instance_data->state == XEN_SHM_STATE_RECEIVER) {
+                wait_event_interruptible(instance_data->wait_queue, 1 );
+            } else {
+                /* Command is invalid in this state */
+                return -ENOTTY;
+            }
 
             break;
         case XEN_SHM_IOCTL_SSIG:
             /*
-             * Waits until a signal is received through the signal channel
+             * Immediatly sends a signal through the signal channel
              */
 
             if(instance_data->state == XEN_SHM_STATE_OFFERER || instance_data->state == XEN_SHM_STATE_RECEIVER) {
