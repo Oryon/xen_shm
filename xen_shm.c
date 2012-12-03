@@ -32,6 +32,7 @@
 #include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
+#include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/types.h>
 #include <linux/uaccess.h>
@@ -703,11 +704,13 @@ clean:
 static irqreturn_t
 xen_shm_event_handler(int irq, void* arg)
 {
-    struct xen_shm_instance_data* data = (struct xen_shm_instance_data*) arg;
+    struct xen_shm_instance_data* data;
+
+    data = (struct xen_shm_instance_data*) arg;
 
     printk(KERN_WARNING "xen_shm: A signal has just been handled\n");
 
-    wake_up_interruptible (data->wait_queue);
+    wake_up_interruptible(data->wait_queue);
 
     return IRQ_HANDLED; //Can also return IRQ_NONE or IRQ_WAKE_THREAD
 }
