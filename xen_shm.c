@@ -780,7 +780,7 @@ clean:
     }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
-    free_empty_pages_and_pagevec(data->pages_count - 1, data->user_pages);
+    free_empty_pages_and_pagevec(data->user_pages, data->pages_count - 1);
 #else
     free_xenballooned_pages(data->pages_count - 1, data->user_pages);
 free_pages:
