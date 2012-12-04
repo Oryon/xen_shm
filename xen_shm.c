@@ -712,7 +712,7 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
             page_pointer = vma->vm_start;
             for (page = 0; page < data->pages_count - 1; ++page) {
                 printk(KERN_INFO "Mmapping@ %p %p %p\n", data->user_pages[page], pfn_to_kaddr(page_to_pfn(data->user_pages[page])), (void*)page_pointer);
-                gnttab_set_map_op(&map_op, (phys_addr_t)pfn_to_kaddr(page_to_pfn(data->user_pages[page])), GNTMAP_host_map | GNTMAP_application_map, meta_page_p->grant_refs[page], data->distant_domid);
+                gnttab_set_map_op(&map_op, (phys_addr_t)pfn_to_kaddr(page_to_pfn(data->user_pages[page])), GNTMAP_host_map | GNTMAP_application_map, meta_page_p->grant_refs[page + 1], data->distant_domid);
 
                 err = gnttab_map_refs(&map_op, NULL, data->user_pages + page, 1);
                 if (err != 0) {
