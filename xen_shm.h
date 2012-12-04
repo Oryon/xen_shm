@@ -84,20 +84,20 @@ struct xen_shm_ioctlarg_receiver {
 
 
 /*
- * Advanced waits for some request for at most <timeout_ms> milliseconds (not precise).
- * Set <timeout_ms> to 0 to wait with no timeout.
+ * Advanced waits IOCTL
  * Returns -ERESTARTSYS if a signal interrupted the wait.
- *         -ENOTTY if the state doesn't allow to wait (closed on one side or not initialized)
- * <remaining_ms> is zero if the request has been fullfilled. The remaining time otherwise.
+ *         -ENOTTY if the memory has not been initialized
+ *         -EPIPE if the memory has been closed on one side
+ *         0 otherwise
  */
 #define XEN_SHM_IOCTL_AWAIT           _IOWR(XEN_SHM_MAGIC_NUMBER, 4, struct xen_shm_ioctlarg_await )
 struct xen_shm_ioctlarg_await {
     /* In arguments */
-    uint8_t request_flags;
-    unsigned long timeout_ms;
+    uint8_t request_flags;     //Indicate what events to wait for (0 means you wait untill the memory is closed)
+    unsigned long timeout_ms;  //Timeout in ms (0 for no timeout)
 
     /* Out arguments */
-    unsigned long remaining_ms;
+    unsigned long remaining_ms;//Zero if the timeout has reached its end. Remaining time otherwise.
 };
 /* Waits for a userspace signal. */
 #define XEN_SHM_IOCTL_AWAIT_USER 0x01

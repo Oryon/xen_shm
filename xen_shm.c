@@ -587,11 +587,19 @@ xen_shm_release(struct inode * inode, struct file * filp)
     case XEN_SHM_STATE_OFFERER:
         meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
         meta_page_p->offerer_state = XEN_SHM_META_PAGE_STATE_CLOSED;
+
+        notify_remote_via_evtchn(data->local_ec_port); //Sends a signal to wake up waiting processes
+        wake_up_interruptible(&data->wait_queue); //Wake up local waiting processes
+
         break;
     case XEN_SHM_STATE_RECEIVER:
     case XEN_SHM_STATE_RECEIVER_MAPPED:
         meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
         meta_page_p->receiver_state = XEN_SHM_META_PAGE_STATE_CLOSED;
+
+        notify_remote_via_evtchn(data->local_ec_port); //Sends a signal to wake up waiting processes
+        wake_up_interruptible(&data->wait_queue); //Wake up local waiting processes
+
         break;
     default:
         printk(KERN_WARNING "xen_shm: Impossibulu staytu !\n");
@@ -1082,6 +1090,8 @@ undo_alloc:
     return error;
 }
 
+
+
 static int
 __xen_shm_ioctl_await(struct xen_shm_instance_data* data,
                       struct xen_shm_ioctlarg_await* arg)
@@ -1092,43 +1102,47 @@ __xen_shm_ioctl_await(struct xen_shm_instance_data* data,
     int user_flag;
     int init_flag;
 
-    if(data->state == XEN_SHM_STATE_OPENED //Channel just opened, not initialized
-            || arg->request_flags==0) //Nothing to wait for
+    user_flag = arg->request_flags & XEN_SHM_IOCTL_AWAIT_USER;
+    init_flag = arg->request_flags & XEN_SHM_IOCTL_AWAIT_INIT;
+
+    if(data->state == XEN_SHM_STATE_OPENED) //Not opened yet
     {
         return -ENOTTY;
     }
 
     meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
 
-    if(meta_page_p->offerer_state == XEN_SHM_META_PAGE_STATE_CLOSED //Closed on some side
-           || meta_page_p->receiver_state == XEN_SHM_META_PAGE_STATE_CLOSED  ) {
-        return -ENOTTY;
-    }
-
-
-    user_flag = arg->request_flags & XEN_SHM_IOCTL_AWAIT_USER;
-    init_flag = arg->request_flags & XEN_SHM_IOCTL_AWAIT_INIT;
+    //Condition telling wether the pipe is known to be closed
+#define XEN_SHM_IOCTL_AWAIT_COND (meta_page_p->offerer_state == XEN_SHM_META_PAGE_STATE_CLOSED \
+    || meta_page_p->receiver_state == XEN_SHM_META_PAGE_STATE_CLOSED)
 
     data->user_signal = 0; //Trigger the wait
 
     if(arg->timeout_ms == 0) {
-        return wait_event_interruptible(data->wait_queue,
-                (user_flag&&data->user_signal) || (init_flag&&data->initial_signal) );
+        retval = wait_event_interruptible(data->wait_queue,
+                (user_flag&&data->user_signal) || (init_flag&&data->initial_signal) ||
+                XEN_SHM_IOCTL_AWAIT_COND);
+        if(retval < 0) {
+            return retval;
+        }
     } else {
         jiffies = (arg->timeout_ms*HZ)/1000;
         retval = wait_event_interruptible_timeout(data->wait_queue,
-                (user_flag&&data->user_signal) || (init_flag&&data->initial_signal),
+                (user_flag&&data->user_signal) || (init_flag&&data->initial_signal) ||
+                XEN_SHM_IOCTL_AWAIT_COND,
                         jiffies);
         if(retval < 0) {
             return retval;
         }
-
         arg->remaining_ms = (retval==jiffies)?arg->timeout_ms:(retval*1000)/HZ;
-
-        return 0;
+        retval = 0;
     }
 
-
+    if(XEN_SHM_IOCTL_AWAIT_COND) {
+        return -EPIPE;
+    }
+#undef XEN_SHM_IOCTL_AWAIT_COND
+    return 0;
 
 }
 
