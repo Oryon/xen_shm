@@ -955,6 +955,7 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
     if((error = __xen_shm_open_ec_offerer(data)) != 0) {
     	goto undo_grant;
     }
+    meta_page_p->offerer_ec_port = data->local_ec_port;
 
 
     /* If OK, states are changed*/
