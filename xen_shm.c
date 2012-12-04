@@ -1090,6 +1090,11 @@ undo_alloc:
     return error;
 }
 
+static int
+__xen_shm_is_broken_pipe(struct xen_shm_meta_page_data* meta_page_p) {
+    return (meta_page_p->offerer_state == XEN_SHM_META_PAGE_STATE_CLOSED
+            || meta_page_p->receiver_state == XEN_SHM_META_PAGE_STATE_CLOSED);
+}
 
 
 static int
@@ -1113,15 +1118,13 @@ __xen_shm_ioctl_await(struct xen_shm_instance_data* data,
     meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
 
     //Condition telling wether the pipe is known to be closed
-#define XEN_SHM_IOCTL_AWAIT_COND (meta_page_p->offerer_state == XEN_SHM_META_PAGE_STATE_CLOSED \
-    || meta_page_p->receiver_state == XEN_SHM_META_PAGE_STATE_CLOSED)
 
     data->user_signal = 0; //Trigger the wait
 
     if(arg->timeout_ms == 0) {
         retval = wait_event_interruptible(data->wait_queue,
                 (user_flag&&data->user_signal) || (init_flag&&data->initial_signal) ||
-                XEN_SHM_IOCTL_AWAIT_COND);
+                __xen_shm_is_broken_pipe(meta_page_p));
         if(retval < 0) {
             return retval;
         }
@@ -1129,7 +1132,7 @@ __xen_shm_ioctl_await(struct xen_shm_instance_data* data,
         jiffies = (arg->timeout_ms*HZ)/1000;
         retval = wait_event_interruptible_timeout(data->wait_queue,
                 (user_flag&&data->user_signal) || (init_flag&&data->initial_signal) ||
-                XEN_SHM_IOCTL_AWAIT_COND,
+                __xen_shm_is_broken_pipe(meta_page_p),
                         jiffies);
         if(retval < 0) {
             return retval;
@@ -1138,12 +1141,29 @@ __xen_shm_ioctl_await(struct xen_shm_instance_data* data,
         retval = 0;
     }
 
-    if(XEN_SHM_IOCTL_AWAIT_COND) {
+    if(__xen_shm_is_broken_pipe(meta_page_p)) {
         return -EPIPE;
     }
 #undef XEN_SHM_IOCTL_AWAIT_COND
     return 0;
 
+}
+
+
+static int
+__xen_shm_ioctl_ssig(struct xen_shm_instance_data* data) {
+
+    if(data->state == XEN_SHM_STATE_OPENED) {
+        return -ENOTTY;
+    }
+
+    if(__xen_shm_is_broken_pipe((struct xen_shm_meta_page_data*) data->shared_memory)) {
+        return -EPIPE;
+    }
+
+    notify_remote_via_evtchn(data->local_ec_port);
+
+    return 0;
 }
 
 
@@ -1257,12 +1277,7 @@ xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
              * Immediatly sends a signal through the signal channel
              */
 
-            if(instance_data->state == XEN_SHM_STATE_OFFERER || instance_data->state == XEN_SHM_STATE_RECEIVER) {
-                notify_remote_via_evtchn(instance_data->local_ec_port);
-            } else {
-                /* Command is invalid in this state */
-                return -ENOTTY;
-            }
+            return __xen_shm_ioctl_ssig(instance_data);
 
             break;
         case XEN_SHM_IOCTL_GET_DOMID:
