@@ -59,7 +59,7 @@
 #include "xen_shm.h"
 
 /*
- * Deal with moving functions
+ * Deal with old linux
  */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
 # define XEN_SHM_ALLOC_VM_AREA(x) alloc_vm_area(x)
@@ -246,6 +246,73 @@ static void __xen_shm_add_delayed_free(struct xen_shm_instance_data* data);
 #if (DELAYED_FREE_ON_CLOSE || DELAYED_FREE_ON_OPEN)
 static void  __xen_shm_free_delayed_queue(void);
 #endif /* (DELAYED_FREE_ON_CLOSE || DELAYED_FREE_ON_OPEN)*/
+
+/*
+ * Dealing with old Xen
+ */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
+static int
+gnttab_map_refs(struct gnttab_map_grant_ref *map_ops,
+                struct gnttab_map_grant_ref *kmap_ops,
+                struct page **pages, unsigned int count)
+{
+    int i, ret;
+    pte_t *pte;
+    unsigned long mfn;
+
+    ret = HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, map_ops, count);
+    if (ret)
+        return ret;
+
+    if (xen_feature(XENFEAT_auto_translated_physmap))
+        return ret;
+
+    for (i = 0; i < count; i++) {
+        /* Do not add to override if the map failed. */
+        if (map_ops[i].status)
+            continue;
+
+        if (map_ops[i].flags & GNTMAP_contains_pte) {
+            pte = (pte_t *) (mfn_to_virt(PFN_DOWN(map_ops[i].host_addr)) +
+                (map_ops[i].host_addr & ~PAGE_MASK));
+            mfn = pte_mfn(*pte);
+        } else {
+            mfn = PFN_DOWN(map_ops[i].dev_bus_addr);
+        }
+        ret = m2p_add_override(mfn, pages[i], kmap_ops ?
+                       &kmap_ops[i] : NULL);
+        if (ret)
+            return ret;
+    }
+
+    return ret;
+}
+
+
+static int
+gnttab_unmap_refs(struct gnttab_unmap_grant_ref *unmap_ops,
+                  struct page **pages, unsigned int count, bool clear_pte)
+{
+    int i, ret;
+
+    ret = HYPERVISOR_grant_table_op(GNTTABOP_unmap_grant_ref, unmap_ops, count);
+    if (ret)
+        return ret;
+
+    if (xen_feature(XENFEAT_auto_translated_physmap))
+        return ret;
+
+    for (i = 0; i < count; i++) {
+        ret = m2p_remove_override(pages[i], clear_pte);
+        if (ret)
+            return ret;
+    }
+
+    return ret;
+}
+#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0) */
+
 
 /*
  * Code :)
@@ -653,6 +720,13 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
                 return -EINVAL;
             }
             // Allocate pages
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
+            data->user_pages = alloc_empty_pages_and_pagevec(data->pages_count - 1);
+            if (data->user_pages == NULL) {
+                printk(KERN_WARNING "xen_shm: Unable to pages\n");
+                return -ENOMEM;
+            }
+#else
             data->user_pages = kcalloc(data->pages_count - 1, sizeof(data->user_pages[0]), GFP_KERNEL);
             if (data->user_pages == NULL) {
                 printk(KERN_WARNING "xen_shm: Unable to allocate table space\n");
@@ -663,6 +737,7 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
                 printk(KERN_WARNING "xen_shm: Unable to get xenballooned_pages : %i\n", err);
                 goto free_pages;
             }
+#endif
             // Ok, map logical memory
             meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
             page_pointer = vma->vm_start;
@@ -704,10 +779,13 @@ clean:
         gnttab_unmap_refs(&unmap_op, data->user_pages + page, 1, 0);
     }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
+    free_empty_pages_and_pagevec(data->pages_count - 1, data->user_pages);
+#else
     free_xenballooned_pages(data->pages_count - 1, data->user_pages);
 free_pages:
     kfree(data->user_pages);
-
+#endif
     return -EFAULT;
 }
 
