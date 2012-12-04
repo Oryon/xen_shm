@@ -655,6 +655,10 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
     phys_addr_t page_pointer;
 #endif
 
+    if ((vma->vm_flags & VM_WRITE) && !(vma->vm_flags & VM_SHARED)) {
+        return -EINVAL;
+    }
+
     data = (struct xen_shm_instance_data*) filp->private_data;
 
     switch(data->state) {
