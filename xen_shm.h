@@ -84,16 +84,38 @@ struct xen_shm_ioctlarg_receiver {
 
 
 /*
+ * Advanced waits for some request for at most <timeout_ms> milliseconds (not precise).
+ * Set <timeout_ms> to 0 to wait with no timeout.
+ * Returns -ERESTARTSYS if a signal interrupted the wait.
+ *         -ENOTTY if the state doesn't allow to wait (closed on one side or not initialized)
+ * <remaining_ms> is zero if the request has been fullfilled. The remaining time otherwise.
+ */
+#define XEN_SHM_IOCTL_AWAIT           _IOWR(XEN_SHM_MAGIC_NUMBER, 4, struct xen_shm_ioctlarg_await )
+struct xen_shm_ioctlarg_await {
+    /* In arguments */
+    uint8_t request_flags;
+    unsigned long timeout_ms;
+
+    /* Out arguments */
+    unsigned long remaining_ms;
+};
+/* Waits for a userspace signal. */
+#define XEN_SHM_IOCTL_AWAIT_USER 0x01
+/* Waits for the channel to have been initialized. */
+#define XEN_SHM_IOCTL_AWAIT_INIT 0x02
+
+
+/*
  * Sends a signal through the event channel
  * Argument is ignored
  */
-#define XEN_SHM_IOCTL_SSIG            _IO(XEN_SHM_MAGIC_NUMBER, 4)
+#define XEN_SHM_IOCTL_SSIG            _IO(XEN_SHM_MAGIC_NUMBER, 5)
 
 
 /*
  * Get the machine's domain id
  */
-#define XEN_SHM_IOCTL_GET_DOMID       _IOR(XEN_SHM_MAGIC_NUMBER, 5, struct xen_shm_ioctlarg_getdomid )
+#define XEN_SHM_IOCTL_GET_DOMID       _IOR(XEN_SHM_MAGIC_NUMBER, 6, struct xen_shm_ioctlarg_getdomid )
 struct xen_shm_ioctlarg_getdomid {
     /* In arguments */
 

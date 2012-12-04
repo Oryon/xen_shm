@@ -178,7 +178,8 @@ struct xen_shm_instance_data {
     /* Wait queue for the event channel */
     wait_queue_head_t wait_queue;
     unsigned int ec_irq;
-    uint8_t wake_up;
+    uint8_t initial_signal;
+    uint8_t user_signal;
 
 };
 
@@ -413,7 +414,8 @@ xen_shm_open(struct inode * inode, struct file * filp)
     instance_data->shared_memory = 0;
     instance_data->next_delayed = NULL;
     instance_data->unmapped_area = NULL;
-    instance_data->wake_up = 0;
+    instance_data->initial_signal = 0;
+    instance_data->user_signal = 0;
 
     filp->private_data = (void *) instance_data;
 
@@ -738,7 +740,15 @@ xen_shm_event_handler(int irq, void* arg)
     data = (struct xen_shm_instance_data*) arg;
 
     printk(KERN_WARNING "xen_shm: A signal has just been handled\n");
-    data->wake_up = 1;
+    if(data->initial_signal) {
+        if(data->state == XEN_SHM_STATE_OFFERER) { //Responds to the initial signal
+            notify_remote_via_evtchn(data->local_ec_port);
+        }
+        data->initial_signal = 1;
+    } else {
+        data->user_signal = 1;
+    }
+
     wake_up_interruptible(&data->wait_queue);
 
     return IRQ_HANDLED; //Can also return IRQ_NONE or IRQ_WAKE_THREAD
@@ -951,6 +961,7 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
     data->state = XEN_SHM_STATE_OFFERER;
     meta_page_p->offerer_state = XEN_SHM_META_PAGE_STATE_OPENED;
 
+
     return 0;
 
 
@@ -1051,6 +1062,11 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     data->state = XEN_SHM_STATE_RECEIVER;
     meta_page_p->receiver_state = XEN_SHM_META_PAGE_STATE_OPENED;
 
+    /* Send the initial signal */
+    notify_remote_via_evtchn(data->local_ec_port);
+
+
+
     return 0;
 
 undo_map:
@@ -1061,6 +1077,56 @@ undo_alloc:
     __xen_shm_free_shared_memory_receiver(data);
 
     return error;
+}
+
+static int
+__xen_shm_ioctl_await(struct xen_shm_instance_data* data,
+                      struct xen_shm_ioctlarg_await* arg)
+{
+    struct xen_shm_meta_page_data* meta_page_p;
+    unsigned long jiffies;
+    int retval;
+    int user_flag;
+    int init_flag;
+
+    if(data->state == XEN_SHM_STATE_OPENED //Channel just opened, not initialized
+            || arg->request_flags==0) //Nothing to wait for
+    {
+        return -ENOTTY;
+    }
+
+    meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
+
+    if(meta_page_p->offerer_state == XEN_SHM_META_PAGE_STATE_CLOSED //Closed on some side
+           || meta_page_p->receiver_state == XEN_SHM_META_PAGE_STATE_CLOSED  ) {
+        return -ENOTTY;
+    }
+
+
+    user_flag = arg->request_flags & XEN_SHM_IOCTL_AWAIT_USER;
+    init_flag = arg->request_flags & XEN_SHM_IOCTL_AWAIT_INIT;
+
+    data->user_signal = 0; //Trigger the wait
+
+    if(arg->timeout_ms == 0) {
+        return wait_event_interruptible(data->wait_queue,
+                (user_flag&&data->user_signal) || (init_flag&&data->initial_signal) );
+    } else {
+        jiffies = (arg->timeout_ms*HZ)/1000;
+        retval = wait_event_interruptible_timeout(data->wait_queue,
+                (user_flag&&data->user_signal) || (init_flag&&data->initial_signal),
+                        jiffies);
+        if(retval < 0) {
+            return retval;
+        }
+
+        arg->remaining_ms = (retval==jiffies)?arg->timeout_ms:(retval*1000)/HZ;
+
+        return 0;
+    }
+
+
+
 }
 
 
@@ -1083,6 +1149,7 @@ xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     struct xen_shm_ioctlarg_offerer offerer_karg;
     struct xen_shm_ioctlarg_receiver receiver_karg;
     struct xen_shm_ioctlarg_getdomid getdomid_karg;
+    struct xen_shm_ioctlarg_await await_karg;
 
     /* retval */
     int retval = 0;
@@ -1148,16 +1215,24 @@ xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
             /*
              * Waits until a signal is received through the signal channel
              */
-            if(instance_data->state == XEN_SHM_STATE_OFFERER || instance_data->state == XEN_SHM_STATE_RECEIVER) {
-                instance_data->wake_up = 0; //Prepare the condition
-                retval = wait_event_interruptible(instance_data->wait_queue, instance_data->wake_up );
-                if (retval != 0) {
-                    return retval;
-                }
-            } else {
-                /* Command is invalid in this state */
-                return -ENOTTY;
-            }
+            await_karg.remaining_ms = 0;
+            await_karg.request_flags = XEN_SHM_IOCTL_AWAIT_INIT | XEN_SHM_IOCTL_AWAIT_USER;
+
+            return __xen_shm_ioctl_await(instance_data, &await_karg);
+
+            break;
+        case XEN_SHM_IOCTL_AWAIT:
+            retval = copy_from_user(&await_karg, arg_p, sizeof(struct xen_shm_ioctlarg_await)); //Copying from userspace
+            if (retval != 0)
+                return -EFAULT;
+
+            retval = __xen_shm_ioctl_await(instance_data, &await_karg);
+            if (retval != 0)
+                return retval;
+
+            retval = copy_to_user(arg_p, &await_karg, sizeof(struct xen_shm_ioctlarg_await)); //Copying to userspace
+            if (retval != 0)
+                return -EFAULT;
 
             break;
         case XEN_SHM_IOCTL_SSIG:
