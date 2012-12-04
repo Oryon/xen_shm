@@ -39,6 +39,7 @@
 #include <linux/version.h>
 #include <linux/vmalloc.h>
 #include <linux/wait.h>
+#include <xen/balloon.h>
 #include <xen/interface/xen.h>
 #include <xen/interface/event_channel.h>
 #include <xen/events.h>
@@ -157,8 +158,8 @@ struct xen_shm_instance_data {
     unsigned int offerer_alloc_order;  //Offerer only: Saved value of 'order'. Is used when freeing the pages
 
     struct vm_struct *unmapped_area;  //Receiver only: Virtual memeroy space allocated on the receiver
-    unsigned long user_mapped_memory;  //Receiver only: Address where the user have mapped the shared memory
-
+    unsigned long user_mapped_memory; //Receiver only: Address where the user have mapped the shared memory
+    struct page **user_pages;         //Receiver only: Pages for the user
 
     /* Xen grant_table data */
     domid_t local_domid;    //The local domain id
@@ -626,11 +627,7 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
 
     struct gnttab_map_grant_ref map_op;
     struct gnttab_unmap_grant_ref unmap_op;
-    unsigned long  mfn;
-    char *page_pointer;
-#ifdef DEBUG_OVERRIDE
-    int page_tmp;
-#endif /* DEBUG_OVERRIDE */
+    phys_addr_t page_pointer;
 
     data = (struct xen_shm_instance_data*) filp->private_data;
 
@@ -651,54 +648,46 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
             return -EPIPE;
         case XEN_SHM_STATE_RECEIVER:
             // Verify size
-            if (vma->vm_end - vma->vm_start != (data->pages_count - 1) * PAGE_SIZE) {
+            if ((vma->vm_end - vma->vm_start) >> PAGE_SHIFT != data->pages_count - 1) {
                 printk(KERN_WARNING "xen_shm: Only mapping of the right size are accepted\n");
                 return -EINVAL;
             }
+            // Allocate pages
+            data->user_pages = kcalloc(data->pages_count - 1, sizeof(data->user_pages[0]), GFP_KERNEL);
+            if (data->user_pages == NULL) {
+                printk(KERN_WARNING "xen_shm: Unable to allocate table space\n");
+                return -ENOMEM;
+            }
+            err = alloc_xenballooned_pages(data->pages_count - 1, data->user_pages, false);
+            if (err != 0) {
+                printk(KERN_WARNING "xen_shm: Unable to get xenballooned_pages : %i\n", err);
+                goto free_pages;
+            }
             // Ok, map logical memory
             meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
-            page_pointer = (char *)vma->vm_start;
-            for (page = 1; page < data->pages_count; ++page) {
-                gnttab_set_map_op(&map_op, (phys_addr_t) page_pointer , GNTMAP_host_map, meta_page_p->grant_refs[page], data->distant_domid);
+            page_pointer = vma->vm_start;
+            for (page = 0; page < data->pages_count - 1; ++page) {
+                printk(KERN_INFO "Mmapping@ %p %p %p\n", data->user_pages[page], pfn_to_kaddr(page_to_pfn(data->user_pages[page])), (void*)page_pointer);
+                gnttab_set_map_op(&map_op, (phys_addr_t)pfn_to_kaddr(page_to_pfn(data->user_pages[page])), GNTMAP_host_map | GNTMAP_application_map, meta_page_p->grant_refs[page], data->distant_domid);
 
-                if (HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, &map_op, 1)) {
-                    printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed");
+                err = gnttab_map_refs(&map_op, NULL, data->user_pages + page, 1);
+                if (err != 0) {
+                    printk(KERN_WARNING "xen_shm: Unable to grant ref (err  %i)\n", err);
                     err = -EFAULT;
                     goto clean;
                 }
 
-                if (map_op.status < 0) {
-                    printk(KERN_WARNING "xen_shm: HYPERVISOR map grant ref failed with err %i \n", map_op.status);
-                    err = -EINVAL;
+                data->grant_map_handles[page + 1] = map_op.handle;
+
+                err = vm_insert_page(vma, page_pointer, data->user_pages[page]);
+                if (err != 0) {
+                    ++page;
+                    printk(KERN_WARNING "xen_shm:  vm_insert_page failure\n");
                     goto clean;
                 }
-                data->grant_map_handles[page] = map_op.handle;
-
-                if (map_op.flags & GNTMAP_contains_pte) {
-                    mfn = pte_mfn(*((pte_t *)(mfn_to_virt(PFN_DOWN(map_op.host_addr)) +(map_op.host_addr & ~PAGE_MASK))));
-                } else {
-                    mfn = PFN_DOWN(map_op.dev_bus_addr);
-                }
-
-                // The override doesn't work :'( skip it for now
-#ifdef DEBUG_OVERRIDE
-                // Overide whatever
-                if (xen_feature(XENFEAT_auto_translated_physmap)) {
-                    printk("xen_shm: Unable to enter lazy mode\n");
-                }
-                arch_enter_lazy_mmu_mode();
-
-                err = m2p_add_override(mfn, virt_to_page(page_pointer), NULL);
-                if (err != 0) {
-                    printk(KERN_WARNING "xen_shm: Unable to add override page %d: %d\n", page - 1, err);
-                    err = -EBADFD
-                    goto clean_override;
-                }
-                arch_leave_lazy_mmu_mode();
-#endif /* DEBUG_OVERRIDE */
-
                 page_pointer += PAGE_SIZE;
             }
+            vma->vm_flags |= VM_RESERVED|VM_DONTEXPAND;
             data->user_mapped_memory = vma->vm_start;
             data->state = XEN_SHM_STATE_RECEIVER_MAPPED;
             return 0;
@@ -710,24 +699,14 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
     return -ENOSYS;
 
 clean:
-#ifdef DEBUG_OVERRIDE
-    if (xen_feature(XENFEAT_auto_translated_physmap)) {
-        printk("xen_shm: Unable to enter lazy mode\n");
+    for (--page; page >= 0; --page) {
+        gnttab_set_unmap_op(&unmap_op, (phys_addr_t)pfn_to_kaddr(page_to_pfn(data->user_pages[page - 1])), GNTMAP_host_map, data->grant_map_handles[page]);
+        gnttab_unmap_refs(&unmap_op, data->user_pages + page, 1, 0);
     }
-    arch_enter_lazy_mmu_mode();
-    for (page_tmp = page - 1; page_tmp > 0; --page_tmp) {
-        m2p_remove_override(virt_to_page(vma->vm_start + (page_tmp * PAGE_SIZE)), 0);
-    }
-    arch_leave_lazy_mmu_mode();
-#endif /* DEBUG_OVERRIDE */
-    if (err != -EBADFD) {
-      page--;
-      page_pointer -= PAGE_SIZE;
-    }
-    for (; page > 0; --page) {
-        gnttab_set_unmap_op(&unmap_op, (unsigned long) page_pointer, GNTMAP_host_map, data->grant_map_handles[page]);
-        HYPERVISOR_grant_table_op(GNTTABOP_unmap_grant_ref, &unmap_op, 1);
-    }
+
+    free_xenballooned_pages(data->pages_count - 1, data->user_pages);
+free_pages:
+    kfree(data->user_pages);
 
     return -EFAULT;
 }
