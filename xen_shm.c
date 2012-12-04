@@ -686,6 +686,8 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
             data->user_mapped_memory = (phys_addr_t) __get_free_pages(GFP_KERNEL, data->pages_count);
             return remap_pfn_range(vma, vma->vm_start, virt_to_pfn(data->user_mapped_memory), vma->vm_end - vma->vm_start, vma->vm_page_prot);
 #else
+            /* Setting the correct flags */
+            vma->vm_flags |= VM_RESERVED|VM_DONTEXPAND;
             // Allocate pages
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
             data->user_pages = alloc_empty_pages_and_pagevec(data->pages_count - 1);
@@ -729,7 +731,6 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
                 }
                 page_pointer += PAGE_SIZE;
             }
-            vma->vm_flags |= VM_RESERVED|VM_DONTEXPAND;
             data->user_mapped_memory = vma->vm_start;
             data->state = XEN_SHM_STATE_RECEIVER_MAPPED;
             return 0;
