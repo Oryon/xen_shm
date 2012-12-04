@@ -10,7 +10,7 @@
  *
  */
 
-
+#define DEBUG 1
 
 /*
  * Kernel module information (submitted at the end of the file)
@@ -480,6 +480,9 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data, bool first)
 
             return 0;
         case XEN_SHM_STATE_RECEIVER_MAPPED:
+#if DEBUG
+            free_pages(data->user_mapped_memory, data->offerer_alloc_order);
+#else
             /* Try to unmap all user-mapped pages */
             while (data->pages_count > 1) {
                 gnttab_set_unmap_op(&unmap_op, data->user_mapped_memory + PAGE_SIZE * (data->pages_count - 2), GNTMAP_host_map, data->grant_map_handles[data->pages_count - 1]);
@@ -493,6 +496,7 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data, bool first)
                     goto fail;
                 }
             }
+#endif
             // Continue ! (no break)
         case XEN_SHM_STATE_RECEIVER:
             // Unmap the first page
@@ -641,13 +645,15 @@ __xen_shm_add_delayed_free(struct xen_shm_instance_data* data)
 static int
 xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
 {
-    int page, err;
     struct xen_shm_instance_data* data;
-    struct xen_shm_meta_page_data* meta_page_p;
 
+#if !DEBUG
+    int page, err;
     struct gnttab_map_grant_ref map_op;
     struct gnttab_unmap_grant_ref unmap_op;
+    struct xen_shm_meta_page_data* meta_page_p;
     phys_addr_t page_pointer;
+#endif
 
     data = (struct xen_shm_instance_data*) filp->private_data;
 
@@ -672,6 +678,10 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
                 printk(KERN_WARNING "xen_shm: Only mapping of the right size are accepted\n");
                 return -EINVAL;
             }
+#if DEBUG
+            data->user_mapped_memory = (phys_addr_t) __get_free_pages(GFP_KERNEL, data->pages_count);
+            return remap_pfn_range(vma, vma->vm_start, virt_to_pfn(data->user_mapped_memory), vma->vm_end - vma->vm_start, vma->vm_page_prot);
+#else
             // Allocate pages
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
             data->user_pages = alloc_empty_pages_and_pagevec(data->pages_count - 1);
@@ -719,6 +729,7 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
             data->user_mapped_memory = vma->vm_start;
             data->state = XEN_SHM_STATE_RECEIVER_MAPPED;
             return 0;
+#endif
         default:
             printk(KERN_WARNING "xen_shm: Impossible state !\n");
             break;
@@ -726,6 +737,7 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
 
     return -ENOSYS;
 
+#if !DEBUG
 clean:
     for (--page; page >= 0; --page) {
         gnttab_set_unmap_op(&unmap_op, (phys_addr_t)pfn_to_kaddr(page_to_pfn(data->user_pages[page - 1])), GNTMAP_host_map, data->grant_map_handles[page]);
@@ -738,6 +750,7 @@ clean:
     free_xenballooned_pages(data->pages_count - 1, data->user_pages);
 free_pages:
     kfree(data->user_pages);
+#endif
 #endif
     return -EFAULT;
 }
