@@ -56,7 +56,7 @@ main(int argc, char *argv[])
     while (scanf("%"SCNu32, &init_receiver.grant) != 1);
 
     init_receiver.pages_count = 1;
-    init_receiver.dist_domid = DOMID_SELF;
+    init_receiver.dist_domid = target;
 
     retval = ioctl(fd, XEN_SHM_IOCTL_INIT_RECEIVER, &init_receiver);
     if (retval != 0) {
