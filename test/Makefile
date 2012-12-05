@@ -23,7 +23,7 @@ CFLAGS?=-pipe -O2 -g -Wall -Wextra -Werror \
         -Wno-format-y2k \
         -Wunsafe-loop-optimizations
 
-all: getdomid propose_content get_content waiter notifyer
+all: getdomid propose_content get_content waiter notifyer pipe_reader pipe_writer
 
 test: all
 	./getdomid
@@ -42,3 +42,10 @@ waiter: waiter.o
 	
 notifyer: notifyer.o
 	$(LINK.c) $^ $(LOADLIBES) -o $@
+	
+pipe_reader: pipe_reader.o
+	$(LINK.c) $^ $(LOADLIBES) -o $@
+	
+pipe_writer: pipe_writer.o
+	$(LINK.c) $^ $(LOADLIBES) -o $@	
+	

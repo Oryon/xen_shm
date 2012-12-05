@@ -5,3 +5,6 @@ get_content
 propose_content
 notifyer
 waiter
+pipe_reader
+pipe_writer
+
