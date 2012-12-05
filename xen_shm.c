@@ -54,7 +54,7 @@
 /*
  * Debugging system
  */
-#define XEN_SHM_DEBUG 1
+#define XEN_SHM_DEBUG 0
 #if XEN_SHM_DEBUG
 # define PRINTK(...)  printk(__VA_ARGS__)
 #else /* !XEN_SHM_DEBUG */
@@ -357,7 +357,7 @@ __xen_shm_contruct_receiver_k_ops(pte_t *pte, pgtable_t token, unsigned long add
 
     PRINTK(KERN_DEBUG "xen_shm: Constructing pte (un)map_op\n");
     PRINTK(KERN_DEBUG "xen_shm: addr:%p  pte_maddr %llu\n", data->map_ops + offset, pte_maddr);
-
+    PRINTK(KERN_DEBUG "xen_shm: addr:%p  pte_maddr %llu\n", data->unmap_ops + offset, pte_maddr);
     gnttab_set_map_op(data->map_ops + offset, pte_maddr,
                       GNTMAP_host_map | GNTMAP_application_map | GNTMAP_contains_pte,
                       meta_page_p->grant_refs[offset + 1], data->distant_domid);
@@ -1211,6 +1211,7 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
                     gnttab_set_unmap_op(data->unmap_ops + offset, GNTMAP_host_map, meta_page_p->grant_refs[offset + 1], -1/* Non valid handler */);
                     PRINTK(KERN_DEBUG "xen_shm: Constructing (un)map_op\n");
                     PRINTK(KERN_DEBUG "xen_shm: addr:%p  maddr %llu\n", data->map_ops + offset, addr);
+                    PRINTK(KERN_DEBUG "xen_shm: addr:%p  maddr %llu\n", data->unmap_ops + offset, addr);
                 }
             }
             /* Map everything ! */
