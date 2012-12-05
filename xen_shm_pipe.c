@@ -61,7 +61,7 @@ __xen_shm_pipe_map_shared_memory(struct xen_shm_pipe_priv* p, uint8_t page_count
 {
     void* shared;
 
-    shared = mmap(0, page_count*XEN_SHM_PIPE_PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, p->fd, 0);
+    shared = mmap(0, (size_t) page_count*XEN_SHM_PIPE_PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, p->fd, 0);
     if (shared == MAP_FAILED) {
         return errno;
     }
@@ -140,9 +140,9 @@ xen_shm_pipe_offers(xen_shm_pipe_p pipe, uint8_t page_count,
         return retval;
     }
 
-    *offerer_domid = (uin32_t) init_offerer.local_domid;
-    *grant_ref = (uin32_t) init_offerer.grant;
-    p->buffer_size = page_count*XEN_SHM_PIPE_PAGE_SIZE - sizeof(struct xen_shm_pipe_shared) + 1;
+    *offerer_domid = (uint32_t) init_offerer.local_domid;
+    *grant_ref = (uint32_t) init_offerer.grant;
+    p->buffer_size = (size_t) page_count*XEN_SHM_PIPE_PAGE_SIZE - sizeof(struct xen_shm_pipe_shared) + 1;
 
     return 0;
 }
@@ -174,7 +174,7 @@ xen_shm_pipe_connect(xen_shm_pipe_p pipe, uint8_t page_count, uint32_t offerer_d
         return retval;
     }
 
-    p->buffer_size = page_count*XEN_SHM_PIPE_PAGE_SIZE - sizeof(struct xen_shm_pipe_shared) + 1;
+    p->buffer_size = (size_t) page_count*XEN_SHM_PIPE_PAGE_SIZE - sizeof(struct xen_shm_pipe_shared) + 1;
 
     return 0;
 }
@@ -200,7 +200,7 @@ int xen_shm_pipe_wait(xen_shm_pipe_p pipe, unsigned long timeout_ms) {
 }
 
 
-int xen_shm_pipe_free(xen_shm_pipe_p pipe) {
+void xen_shm_pipe_free(xen_shm_pipe_p pipe) {
     struct xen_shm_pipe_priv* p;
 
     p = pipe;
