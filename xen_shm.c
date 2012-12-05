@@ -52,6 +52,17 @@
 
 
 /*
+ * Debugging system
+ */
+#define XEN_SHM_DEBUG 1
+#if XEN_SHM_DEBUG
+# define PRINTK(...)  printk(__VA_ARGS__)
+#else /* !XEN_SHM_DEBUG */
+# define PRINTK(...)
+#endif /* ?XEN_SHM_DEBUG */
+
+
+/*
  * Deal with old linux/xen
  */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0)
@@ -344,6 +355,9 @@ __xen_shm_contruct_receiver_k_ops(pte_t *pte, pgtable_t token, unsigned long add
     pte_maddr = arbitrary_virt_to_machine(pte).maddr;
     meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
 
+    PRINTK(KERN_DEBUG "xen_shm: Constructing pte (un)map_op\n");
+    PRINTK(KERN_DEBUG "xen_shm: addr:%p  pte_maddr %llu\n", data->map_ops + offset, pte_maddr);
+
     gnttab_set_map_op(data->map_ops + offset, pte_maddr,
                       GNTMAP_host_map | GNTMAP_application_map | GNTMAP_contains_pte,
                       meta_page_p->grant_refs[offset + 1], data->distant_domid);
@@ -357,10 +371,16 @@ __xen_shm_contruct_receiver_k_ops(pte_t *pte, pgtable_t token, unsigned long add
 static void
 __xen_shm_unmap_receiver_grant_pages(struct xen_shm_instance_data *data, int offset, int nb)
 {
+    int err;
+
+    PRINTK(KERN_DEBUG "xen_shm: Global unmap @%p: offset:%i  count:%i\n", data, offset, nb);
+
     while(nb > 0) {
         if (data->unmap_ops[offset].handle != -1) {
-            if (GNTTAB_UNMAP_REFS(data->unmap_ops + offset, data->user_pages + offset, 1)) {
-                printk(KERN_WARNING "xen_shm: error while unmapping refs\n");
+            PRINTK(KERN_DEBUG "xen_shm: Unmaping : addr:%p  pte_maddr %llu\n", data->unmap_ops + offset, (phys_addr_t) data->user_pages + offset);
+            err = GNTTAB_UNMAP_REFS(data->unmap_ops + offset, data->user_pages + offset, 1);
+            if (err != 0) {
+                printk(KERN_WARNING "xen_shm: error while unmapping refs: %i\n", err);
             }
             --nb;
         }
@@ -485,6 +505,7 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data, bool first)
             return 0;
         case XEN_SHM_STATE_RECEIVER_MAPPED:
             if (!data->use_ptemod) {
+                 PRINTK(KERN_DEBUG "xen_shm: __xen_shm_prepare_free unmap\n");
                  __xen_shm_unmap_receiver_grant_pages(data, 0, data->pages_count - 1);
             }
             // Continue ! (no break)
@@ -574,6 +595,7 @@ __xen_shm_mn_invl_range_start(struct mmu_notifier *mn,
         /* Wrong state no need to do anything */
         return;
     }
+    PRINTK(KERN_DEBUG "xen_shm: Invalidating range %lu-%lu (%lu-%lu)\n", start, end, data->user_mem->vm_start, data->user_mem->vm_end);
     if (start >= data->user_mem->vm_end || data->user_mem->vm_start >= end) {
         /* Not sthe right area */
         return;
@@ -589,6 +611,7 @@ __xen_shm_mn_invl_page(struct mmu_notifier *mn,
                        struct mm_struct *mm,
                        unsigned long address)
 {
+         PRINTK(KERN_DEBUG "xen_shm: Invalidating page %lu\n", address);
         __xen_shm_mn_invl_range_start(mn, mm, address, address + PAGE_SIZE);
 }
 
@@ -600,6 +623,7 @@ __xen_shm_mn_release(struct mmu_notifier *mn,
     struct xen_shm_instance_data *data;
 
     data = container_of(mn, struct xen_shm_instance_data, mn);
+    PRINTK(KERN_DEBUG "xen_shm: mn release @%p\n", data);
     __xen_shm_unmap_receiver_grant_pages(data, 0, data->pages_count - 1);
 }
 
@@ -1171,12 +1195,16 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
                     addr = (phys_addr_t) pfn_to_kaddr(page_to_pfn(data->user_pages[offset]));
                     addr = arbitrary_virt_to_machine(lookup_address(addr, &dummy)).maddr;
                     gnttab_set_map_op(data->kmap_ops + offset, addr, GNTMAP_host_map | GNTMAP_contains_pte, meta_page_p->grant_refs[offset + 1], data->distant_domid);
+                    PRINTK(KERN_DEBUG "xen_shm: Constructing kmap_op\n");
+                    PRINTK(KERN_DEBUG "xen_shm: addr:%p  maddr %llu\n", data->kmap_ops + offset, addr);
                 }
             } else {
                 for(offset = 0; offset < data->pages_count - 1; ++offset) {
                     addr = (phys_addr_t) pfn_to_kaddr(page_to_pfn(data->user_pages[offset]));
                     gnttab_set_map_op(data->map_ops + offset, addr, GNTMAP_host_map, meta_page_p->grant_refs[offset + 1], data->distant_domid);
                     gnttab_set_unmap_op(data->unmap_ops + offset, GNTMAP_host_map, meta_page_p->grant_refs[offset + 1], -1/* Non valid handler */);
+                    PRINTK(KERN_DEBUG "xen_shm: Constructing (un)map_op\n");
+                    PRINTK(KERN_DEBUG "xen_shm: addr:%p  maddr %llu\n", data->map_ops + offset, addr);
                 }
             }
             /* Map everything ! */
@@ -1190,6 +1218,7 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
             for (offset = 0; offset < data->pages_count - 1; ++offset) {
                 if (data->map_ops[offset].status != 0) {
                     err = -EINVAL;
+                    PRINTK(KERN_DEBUG "xen_shm: silent map_ref error at %p\n", data->map_ops + offset);
                 } else {
                     data->unmap_ops[offset].handle = data->map_ops[offset].handle;
                 }
@@ -1220,10 +1249,13 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
 
 
 clean:
+    PRINTK(KERN_DEBUG "xen_shm: mmap error, need to clean\n");
     for (offset = 0; offset < data->pages_count - 1; ++offset) {
         if (data->unmap_ops[offset].handle != -1) {
-            if (GNTTAB_UNMAP_REFS(data->unmap_ops + offset, data->user_pages + offset, 1)) {
-                printk(KERN_WARNING "xen_shm: error while unmapping refs\n");
+            PRINTK(KERN_DEBUG "xen_shm: Unmaping: addr:%p  pte_maddr %llu\n", data->unmap_ops + offset, (phys_addr_t) data->user_pages + offset);
+            err = GNTTAB_UNMAP_REFS(data->unmap_ops + offset, data->user_pages + offset, 1);
+            if (err != 0) {
+                printk(KERN_WARNING "xen_shm: error while unmapping refs: %i\n", err);
             }
         }
     }
