@@ -71,7 +71,7 @@ __xen_shm_pipe_map_shared_memory(struct xen_shm_pipe_priv* p, uint8_t page_count
 }
 
 int
-xen_shm_pipe_init(xen_shm_pipe_p * pipe,enum xen_shm_pipe_mod mod,enum xen_shm_pipe_conv conv)
+xen_shm_pipe_init(xen_shm_pipe_p * xpipe,enum xen_shm_pipe_mod mod,enum xen_shm_pipe_conv conv)
 {
     struct xen_shm_pipe_priv* p = malloc(sizeof(struct xen_shm_pipe_priv));
 
@@ -87,18 +87,18 @@ xen_shm_pipe_init(xen_shm_pipe_p * pipe,enum xen_shm_pipe_mod mod,enum xen_shm_p
     p->conv = conv;
     p->mod = mod;
     p->shared = NULL;
-    *pipe = p;
+    *xpipe = p;
 
     return 0;
 
 }
 
-int xen_shm_pipe_getdomid(xen_shm_pipe_p pipe, uint32_t* receiver_domid) {
+int xen_shm_pipe_getdomid(xen_shm_pipe_p xpipe, uint32_t* receiver_domid) {
     struct xen_shm_pipe_priv* p;
     struct xen_shm_ioctlarg_getdomid getdomid;
     int retval;
 
-    p = pipe;
+    p = xpipe;
     if(__xen_shm_pipe_is_offerer(p)) {
         return EINVAL;
     }
@@ -114,14 +114,14 @@ int xen_shm_pipe_getdomid(xen_shm_pipe_p pipe, uint32_t* receiver_domid) {
 }
 
 int
-xen_shm_pipe_offers(xen_shm_pipe_p pipe, uint8_t page_count,
+xen_shm_pipe_offers(xen_shm_pipe_p xpipe, uint8_t page_count,
         uint32_t receiver_domid, uint32_t* offerer_domid, uint32_t* grant_ref)
 {
     struct xen_shm_pipe_priv* p;
     struct xen_shm_ioctlarg_offerer init_offerer;
     int retval;
 
-    p = pipe;
+    p = xpipe;
     if(!__xen_shm_pipe_is_offerer(p)) {
         return EINVAL;
     }
@@ -149,13 +149,13 @@ xen_shm_pipe_offers(xen_shm_pipe_p pipe, uint8_t page_count,
 
 
 int
-xen_shm_pipe_connect(xen_shm_pipe_p pipe, uint8_t page_count, uint32_t offerer_domid, uint32_t grant_ref)
+xen_shm_pipe_connect(xen_shm_pipe_p xpipe, uint8_t page_count, uint32_t offerer_domid, uint32_t grant_ref)
 {
     struct xen_shm_pipe_priv* p;
     struct xen_shm_ioctlarg_receiver init_receiver;
     int retval;
 
-    p = pipe;
+    p = xpipe;
     if(__xen_shm_pipe_is_offerer(p)) {
         return EINVAL;
     }
@@ -179,12 +179,12 @@ xen_shm_pipe_connect(xen_shm_pipe_p pipe, uint8_t page_count, uint32_t offerer_d
     return 0;
 }
 
-int xen_shm_pipe_wait(xen_shm_pipe_p pipe, unsigned long timeout_ms) {
+int xen_shm_pipe_wait(xen_shm_pipe_p xpipe, unsigned long timeout_ms) {
     struct xen_shm_pipe_priv* p;
     struct xen_shm_ioctlarg_await wait;
     int retval;
 
-    p = pipe;
+    p = xpipe;
     if(!__xen_shm_pipe_is_offerer(p) || p->shared == NULL) {
         return EINVAL;
     }
@@ -200,16 +200,16 @@ int xen_shm_pipe_wait(xen_shm_pipe_p pipe, unsigned long timeout_ms) {
 }
 
 
-void xen_shm_pipe_free(xen_shm_pipe_p pipe) {
+void xen_shm_pipe_free(xen_shm_pipe_p xpipe) {
     struct xen_shm_pipe_priv* p;
 
-    p = pipe;
+    p = xpipe;
     if(p->shared !=NULL) {
         munmap(p->shared, p->buffer_size + sizeof(struct xen_shm_pipe_shared));
     }
 
     close(p->fd);
-    free(pipe);
+    free(xpipe);
 }
 
 
