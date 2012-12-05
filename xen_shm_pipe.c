@@ -23,7 +23,7 @@
 
 #define XEN_SHM_PIPE_PAGE_SIZE 4096 //Todo, find an interface
 
-#define XEN_SHM_PIPE_UPDATE_SIZE 128 //When write or read, updates pointers at list every <value> red or written bytes
+#define XEN_SHM_PIPE_UPDATE_SIZE 256 //When write or read, updates pointers at list every <value> red or written bytes
 
 /* Different reader/writer flags */
 #define XSHMP_OPENED  0x00000001
@@ -246,5 +246,105 @@ void xen_shm_pipe_free(xen_shm_pipe_p xpipe) {
     close(p->fd);
     free(xpipe);
 }
+
+
+
+
+ssize_t
+xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
+{
+    struct xen_shm_pipe_priv* p;
+    struct xen_shm_pipe_shared* s;
+    struct xen_shm_ioctlarg_await await_op;
+    int retval;
+    int32_t pointer_diff;
+
+    int32_t to_read;
+    uint8_t* current_buf;   /*Where we will write*/
+    uint8_t* max_buf;       /*Can't write further*/
+    uint8_t* tmp_max_buf;   /*Where we can't write anymore*/
+    uint8_t* read_pointer;
+
+    current_buf = (uint8_t*) buf; //Start at the beginning of the given buffer
+    max_buf = current_buf + nbytes; //Where we must stop
+
+    p = xpipe;
+    if(p->mod == xen_shm_pipe_mod_write) //Not writer
+        return -1;
+
+    if(p->shared == NULL) //Not initialized
+        return -1;
+
+
+    s = p->shared;
+    if(s->reader_flags & XSHMP_CLOSED) //Closed
+        return 0;
+
+    //Prepare wait structure
+    await_op.request_flags = XEN_SHM_IOCTL_AWAIT_USER;
+    await_op.timeout_ms = 0;
+
+    //Wait for available data
+    if(s->read == s->write) {
+        if(s->writer_flags & XSHMP_CLOSED) //Maybe it was gracefully closed
+            return 0;
+
+        s->reader_flags |= XSHMP_WAITING; //Notify that we are waiting
+        if((retval = ioctl(p->fd, XEN_SHM_IOCTL_AWAIT, &await_op))) {
+            if(retval == EPIPE) { //The memory is now closed
+                s->reader_flags |= XSHMP_CLOSED; //Close our side
+                return 0;
+            } else if(retval != 0) {
+                return -1;
+            }
+        }
+
+        s->reader_flags &= ~XSHMP_WAITING; //Stop waiting
+    }
+
+    //Write the more bytes we can
+    while( current_buf != max_buf && s->read != s->write) {
+        pointer_diff = ((int32_t) s->write) - ((int32_t) s->read); //Diff between read and write
+
+        if(pointer_diff > 0) { //Write is to the right, we go up to write
+            to_read = (uint32_t) pointer_diff;
+        } else { //Write is before the read we go up to the end
+            to_read = ((uint32_t) p->buffer_size) - s->read;
+        }
+
+        if(to_read > XEN_SHM_PIPE_UPDATE_SIZE) //We can't write too much without incrementing the read pointer
+            to_read = XEN_SHM_PIPE_UPDATE_SIZE;
+
+        if(to_read > (uint32_t) (max_buf - current_buf)) //We can't read more than asked
+            to_read = nbytes;
+
+        tmp_max_buf = current_buf + to_read; //Prepare end of reading
+        read_pointer = &(s->buffer[s->read]); //Prepare read pointer
+
+        //Read a safe sequence
+        while(current_buf != tmp_max_buf) {
+            *current_buf = *read_pointer;
+            ++*current_buf;
+            ++*read_pointer;
+        }
+
+        if(read_pointer == s->buffer + p->buffer_size ) {
+            read_pointer = s->buffer;
+        }
+
+        s->read = read_pointer - s->buffer;
+
+        //If the writer is waiting, notify
+        if(s->writer_flags & XSHMP_WAITING) {
+            ioctl(p->fd, XEN_SHM_IOCTL_SSIG, 0);
+        }
+
+    }
+
+
+    return (size_t) (current_buf - (uint8_t*) buf);
+
+}
+
 
 
