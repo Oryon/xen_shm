@@ -10,8 +10,6 @@
  *
  */
 
-#define DEBUG 1
-
 /*
  * Kernel module information (submitted at the end of the file)
  */
