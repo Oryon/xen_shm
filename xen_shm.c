@@ -895,6 +895,7 @@ __xen_shm_ioctl_await(struct xen_shm_instance_data* data,
         }
     } else {
         jiffies = (arg->timeout_ms*HZ)/1000;
+        jiffies = (jiffies==0)?1:jiffies; //Cannot be null
         retval = wait_event_interruptible_timeout(data->wait_queue,
                 (user_flag&&data->user_signal) || (init_flag&&data->initial_signal) ||
                 __xen_shm_is_broken_pipe(meta_page_p),
