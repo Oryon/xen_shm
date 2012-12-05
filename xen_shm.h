@@ -39,7 +39,7 @@
 /* The device major number - 0 for automatic allocation */
 #define XEN_SHM_MAJOR_NUMBER 0
 
-
+#define XEN_SHM_DEVICE_PATH "/dev/xen_shm"
 
 /*
  * IOCTL's command numbers and structures
@@ -60,6 +60,7 @@ struct xen_shm_ioctlarg_offerer {
 
     /* Out arguments */
     grant_ref_t grant;
+    domid_t local_domid;
 };
 
 /*

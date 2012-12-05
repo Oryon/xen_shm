@@ -685,6 +685,7 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
 
     //Set argument respond
     arg->grant = meta_page_p->grant_refs[0];
+    arg->local_domid = data->local_domid;
 
     //Set first grant ref
     data->first_page_grant = meta_page_p->grant_refs[0];
