@@ -41,7 +41,7 @@ struct xen_shm_pipe_priv {
 struct xen_shm_pipe_shared {
     uint32_t write;
     uint32_t read;
-    uint8_t buffer[1];
+    uint8_t buffer[0];
 };
 
 inline int __xen_shm_pipe_is_offerer(struct xen_shm_pipe_priv* p);
@@ -142,7 +142,7 @@ xen_shm_pipe_offers(xen_shm_pipe_p pipe, uint8_t page_count,
 
     *offerer_domid = (uint32_t) init_offerer.local_domid;
     *grant_ref = (uint32_t) init_offerer.grant;
-    p->buffer_size = (size_t) page_count*XEN_SHM_PIPE_PAGE_SIZE - sizeof(struct xen_shm_pipe_shared) + 1;
+    p->buffer_size = (size_t) page_count*XEN_SHM_PIPE_PAGE_SIZE - sizeof(struct xen_shm_pipe_shared);
 
     return 0;
 }
@@ -174,7 +174,7 @@ xen_shm_pipe_connect(xen_shm_pipe_p pipe, uint8_t page_count, uint32_t offerer_d
         return retval;
     }
 
-    p->buffer_size = (size_t) page_count*XEN_SHM_PIPE_PAGE_SIZE - sizeof(struct xen_shm_pipe_shared) + 1;
+    p->buffer_size = (size_t) page_count*XEN_SHM_PIPE_PAGE_SIZE - sizeof(struct xen_shm_pipe_shared);
 
     return 0;
 }
@@ -205,7 +205,7 @@ void xen_shm_pipe_free(xen_shm_pipe_p pipe) {
 
     p = pipe;
     if(p->shared !=NULL) {
-        munmap(p->shared, p->buffer_size + sizeof(struct xen_shm_pipe_shared) - 1);
+        munmap(p->shared, p->buffer_size + sizeof(struct xen_shm_pipe_shared));
     }
 
     close(p->fd);
