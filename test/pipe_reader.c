@@ -1,8 +1,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <inttypes.h>
+#include <unistd.h>
 
-#include"../xen_shm_pipe.h"
+#include "../xen_shm_pipe.h"
 
 
 /*
@@ -33,11 +34,19 @@ int main(int argc, char **argv) {
     }
 
     printf("RECEIVER domain id: "PRIu32"\n", local_domid);
-    if( (scanf("Dist domain id: "SCNu32, &dist_domid)!=1)
-            || (scanf("Offerer's grant ref: "SCNu32, &grant_ref)!=1) ) {
+    printf("Distant domain id: ");
+    if((scanf("%"SCNu32, &dist_domid)!=1)) {
         printf("Scanf error");
         return -1;
     }
+
+    printf("Offerer's grant ref: ");
+    if((scanf("%"SCNu32, &grant_ref)!=1)) {
+        printf("Scanf error");
+        return -1;
+    }
+
+
 
     if((retval = xen_shm_pipe_connect(pipe,PAGE_COUNT,dist_domid, grant_ref))) {
         printf("Pipe connect error %"PRIu32"\n", retval);
