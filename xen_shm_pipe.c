@@ -23,6 +23,12 @@
 
 #define XEN_SHM_PIPE_PAGE_SIZE 4096 //Todo, find an interface
 
+#define XEN_SHM_PIPE_UPDATE_SIZE 128 //When write or read, updates pointers at list every <value> red or written bytes
+
+/* Different reader/writer flags */
+#define XSHMP_OPENED  0x00000001
+#define XSHMP_CLOSED  0x00000002
+#define XSHMP_WAITING 0x00000004
 
 /* Private data about the pipe */
 struct xen_shm_pipe_priv {
@@ -39,6 +45,8 @@ struct xen_shm_pipe_priv {
 
 /* Structure of the shared area */
 struct xen_shm_pipe_shared {
+    uint32_t writer_flags;
+    uint32_t reader_flags;
     uint32_t write;
     uint32_t read;
     uint8_t buffer[0];
@@ -46,6 +54,7 @@ struct xen_shm_pipe_shared {
 
 inline int __xen_shm_pipe_is_offerer(struct xen_shm_pipe_priv* p);
 int __xen_shm_pipe_map_shared_memory(struct xen_shm_pipe_priv* p, uint8_t page_count);
+uint32_t* __xen_shm_pipe_get_flags(struct xen_shm_pipe_priv* p, int my_flags);
 
 
 inline int
@@ -55,6 +64,15 @@ __xen_shm_pipe_is_offerer(struct xen_shm_pipe_priv* p)
             || (p->mod==xen_shm_pipe_mod_write && p->conv==xen_shm_pipe_conv_writer_offers);
 }
 
+uint32_t*
+__xen_shm_pipe_get_flags(struct xen_shm_pipe_priv* p, int my_flags)
+{
+    if(p->mod==xen_shm_pipe_mod_write) {
+        return (my_flags)?&(p->shared->writer_flags):&(p->shared->reader_flags);
+    } else {
+        return (my_flags)?&(p->shared->reader_flags):&(p->shared->writer_flags);
+    }
+}
 
 int
 __xen_shm_pipe_map_shared_memory(struct xen_shm_pipe_priv* p, uint8_t page_count)
@@ -144,6 +162,16 @@ xen_shm_pipe_offers(xen_shm_pipe_p xpipe, uint8_t page_count,
     *grant_ref = (uint32_t) init_offerer.grant;
     p->buffer_size = (size_t) page_count*XEN_SHM_PIPE_PAGE_SIZE - sizeof(struct xen_shm_pipe_shared);
 
+    //init structure
+    p->shared->reader_flags = 0;
+    p->shared->writer_flags = 0;
+    p->shared->read = 0;
+    p->shared->write = 0;
+
+    //Set my flag to open
+    uint32_t* myflags = __xen_shm_pipe_get_flags(p, 1);
+    *myflags |= XSHMP_OPENED;
+
     return 0;
 }
 
@@ -176,6 +204,10 @@ xen_shm_pipe_connect(xen_shm_pipe_p xpipe, uint8_t page_count, uint32_t offerer_
 
     p->buffer_size = (size_t) page_count*XEN_SHM_PIPE_PAGE_SIZE - sizeof(struct xen_shm_pipe_shared);
 
+    //Set my flag to open
+    uint32_t* myflags = __xen_shm_pipe_get_flags(p, 1);
+    *myflags |= XSHMP_OPENED;
+
     return 0;
 }
 
@@ -205,13 +237,14 @@ void xen_shm_pipe_free(xen_shm_pipe_p xpipe) {
 
     p = xpipe;
     if(p->shared !=NULL) {
+        uint32_t* myflags = __xen_shm_pipe_get_flags(p, 1);
+        *myflags |= XSHMP_CLOSED;
+
         munmap(p->shared, p->buffer_size + sizeof(struct xen_shm_pipe_shared));
     }
 
     close(p->fd);
     free(xpipe);
 }
-
-
 
 
