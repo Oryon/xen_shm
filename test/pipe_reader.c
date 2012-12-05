@@ -1,7 +1,8 @@
 #include <stdlib.h>
-#include <stdtypes.h>
+#include <stdio.h>
+#include <inttypes.h>
 
-#include<../xen_shm_pipe.h>
+#include"../xen_shm_pipe.h"
 
 
 /*
