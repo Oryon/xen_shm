@@ -14,7 +14,10 @@
  *
  */
 
-#include <stdint.h>
+#ifndef __XEN_SHM_PIPE_H__
+#define __XEN_SHM_PIPE_H__
+
+#include <inttypes.h>
 
 /*
  * Everything is private within this structure. Therefore, the user cannot manipulate it.
@@ -93,7 +96,7 @@ ssize_t xen_shm_pipe_read(xen_shm_pipe_p pipe, void* buf, size_t nbytes);
  */
 void xen_shm_pipe_free(xen_shm_pipe_p);
 
-
+#endif
 
 
 

@@ -10,9 +10,11 @@
  *
  */
 #include <stdio.h>
+#include <inttypes.h>
 #include <sys/ioctl.h>
 #include <errno.h>
 
+#include "xen_shm_pipe.h"
 #include "xen_shm.h"
 
 #define XEN_SHM_PIPE_PAGE_SIZE 4096 //Todo, find an interface
