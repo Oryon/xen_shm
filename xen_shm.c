@@ -56,14 +56,10 @@
 /*
  * Deal with old linux/xen
  */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
-# define XEN_SHM_ALLOC_VM_AREA(x) alloc_vm_area(x)
-# define gnttab_map_refs(map_ops, x, y, count)                            \
-    HYPERVISOR_grant_table_op(GNTTABOP_map_grant_ref, map_ops, count)
-# define gnttab_unmap_refs(unmap_ops, x, count, y)                        \
-    HYPERVISOR_grant_table_op(GNTTABOP_unmap_grant_ref, unmap_ops, count)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0)
+# define GNTTAB_UNMAP_REFS(unmap_ops, page, count) gnttab_unmap_refs(unmap_ops, page, count)
 #else /* LINUX_VERSION_CODE > KERNEL_VERSION(3, 0, 0) */
-# define XEN_SHM_ALLOC_VM_AREA(x) alloc_vm_area(x, NULL)
+# define GNTTAB_UNMAP_REFS(unmap_ops, page, count) gnttab_unmap_refs(unmap_ops, page, count, true)
 #endif /* LINUX_VERSION_CODE ? KERNEL_VERSION(3, 0, 0) */
 
 
@@ -365,7 +361,7 @@ __xen_shm_unmap_receiver_grant_pages(struct xen_shm_instance_data *data, int off
 {
     while(nb > 0) {
         if (data->unmap_ops[offset].handle != -1) {
-            if (gnttab_unmap_refs(data->unmap_ops + offset, data->user_pages + offset, 1, true)) {
+            if (GNTTAB_UNMAP_REFS(data->unmap_ops + offset, data->user_pages + offset, 1)) {
                 printk(KERN_WARNING "xen_shm: error while unmapping refs\n");
             }
             --nb;
@@ -752,7 +748,7 @@ __xen_shm_ioctl_init_receiver(struct xen_shm_instance_data* data,
     /*
      * Allocating memory space
      */
-    data->unmapped_area = XEN_SHM_ALLOC_VM_AREA(PAGE_SIZE);
+    data->unmapped_area = alloc_vm_area(PAGE_SIZE, NULL);
     if (data->unmapped_area == NULL) {
         printk(KERN_WARNING "xen_shm: Cannot allocate vm area.");
         return -ENOMEM;
@@ -947,9 +943,6 @@ xen_shm_open(struct inode * inode, struct file * filp)
     instance_data->user_mem = NULL;
     instance_data->initial_signal = 0;
     instance_data->user_signal = 0;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
-    instance_data->use_ptemod = 0;
-#else /* LINUX_VERSION_CODE > KERNEL_VERSION(3, 0, 0) */
     instance_data->use_ptemod = xen_pv_domain();
     if (instance_data->use_ptemod) {
         instance_data->mm = get_task_mm(current);
@@ -962,7 +955,6 @@ xen_shm_open(struct inode * inode, struct file * filp)
         }
         mmput(instance_data->mm);
     }
-#endif /* LINUX_VERSION_CODE ?KERNEL_VERSION(3, 0, 0) */
 
     filp->private_data = (void *) instance_data;
 
@@ -976,11 +968,9 @@ xen_shm_open(struct inode * inode, struct file * filp)
 
     return 0;
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(3, 0, 0)
 clean:
     kfree(instance_data);
     return -ENOMEM;
-#endif /* LINUX_VERSION_CODE > KERNEL_VERSION(3, 0, 0) */
 }
 
 
@@ -1164,21 +1154,11 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
                 vma->vm_flags |= VM_DONTCOPY;
             }
             // Allocate pages
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
-            for(offset = 0; offset < data->pages_count - 1; ++offset) {
-                data->user_pages[offset] = alloc_page(GFP_KERNEL | __GFP_HIGHMEM);
-                if (data->user_pages == NULL) {
-                    printk(KERN_WARNING "xen_shm: Unable to get enough pages\n");
-                    goto clean_pages;
-                }
-            }
-#else
             err = alloc_xenballooned_pages(data->pages_count - 1, data->user_pages, false);
             if (err != 0) {
                 printk(KERN_WARNING "xen_shm: Unable to get xenballooned_pages : %i\n", err);
                 goto clean_pages;
             }
-#endif
             /* Store the vm_area_struct for latter use */
             data->user_mem = vma;
             /* Create map ops */
@@ -1244,24 +1224,14 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
 clean:
     for (offset = 0; offset < data->pages_count - 1; ++offset) {
         if (data->unmap_ops[offset].handle != -1) {
-            if (gnttab_unmap_refs(data->unmap_ops + offset, data->user_pages + offset, 1, true)) {
+            if (GNTTAB_UNMAP_REFS(data->unmap_ops + offset, data->user_pages + offset, 1)) {
                 printk(KERN_WARNING "xen_shm: error while unmapping refs\n");
             }
         }
     }
 clean_pages:
     data->user_mem = NULL;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
-    for(offset = 0; offset < data->pages_count - 1; ++offset) {
-        if (data->user_pages == NULL) {
-            return -EFAULT;
-        } else {
-            __free_page(data->user_pages[offset]);
-        }
-    }
-#else
     free_xenballooned_pages(data->pages_count - 1, data->user_pages);
-#endif
     return -EFAULT;
 }
 
