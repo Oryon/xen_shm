@@ -27,8 +27,8 @@
 /* Private data about the pipe */
 struct xen_shm_pipe_priv {
     int fd;
-    xen_shm_pipe_mod mod;
-    xen_shm_pipe_mod conv;
+    enum  mod;
+    enum xen_shm_pipe_mod conv;
 
     struct xen_shm_pipe_shared* shared;
 
@@ -71,7 +71,7 @@ __xen_shm_pipe_map_shared_memory(struct xen_shm_pipe_priv* p, uint8_t page_count
 }
 
 int
-xen_shm_pipe_init(xen_shm_pipe_p * pipe,xen_shm_pipe_mod mod,xen_shm_pipe_conv conv)
+xen_shm_pipe_init(xen_shm_pipe_p * pipe,enum xen_shm_pipe_mod mod,enum xen_shm_pipe_conv conv)
 {
     struct xen_shm_pipe_priv* p = malloc(sizeof(struct xen_shm_pipe_priv));
 
@@ -161,7 +161,7 @@ xen_shm_pipe_connect(xen_shm_pipe_p pipe, uint8_t page_count, uint32_t offerer_d
     }
 
     init_receiver.pages_count = page_count;
-    init_receiver.dist_domid = offerer_domid;
+    init_receiver.dist_domid = (domid_t) offerer_domid;
     init_receiver.grant = grant_ref;
 
     retval = ioctl(p->fd, XEN_SHM_IOCTL_INIT_RECEIVER, &init_receiver);
