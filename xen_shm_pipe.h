@@ -25,8 +25,8 @@ typedef void* xen_shm_pipe_p;
  * The pipe mode on this side
  */
 typedef enum {
-    write,
-    read
+    xen_shm_pipe_mod_write,
+    xen_shm_pipe_mod_read
 } xen_shm_pipe_mod;
 
 
@@ -34,8 +34,8 @@ typedef enum {
  * The direction convention between writer/reader offerer/receiver
  */
 typedef enum {
-    writer_offers,
-    reader_offers
+    xen_shm_pipe_conv_writer_offers,
+    xen_shm_pipe_conv_reader_offers
 } xen_shm_pipe_conv;
 
 

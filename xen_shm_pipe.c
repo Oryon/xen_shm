@@ -41,7 +41,8 @@ struct xen_shm_pipe_shared {
 int inline
 __xen_shm_pipe_is_offerer(struct xen_shm_pipe_priv* p)
 {
-    return (p->mod==read && p->conv==reader_offers) || (p->mod==write && p->conv==writer_offers);
+    return (p->mod==xen_shm_pipe_mod_read && p->conv==xen_shm_pipe_conv_reader_offers)
+            || (p->mod==xen_shm_pipe_mod_write && p->conv==xen_shm_pipe_conv_writer_offers);
 }
 
 
