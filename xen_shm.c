@@ -623,6 +623,12 @@ __xen_shm_mn_release(struct mmu_notifier *mn,
     struct xen_shm_instance_data *data;
 
     data = container_of(mn, struct xen_shm_instance_data, mn);
+
+    if (data->user_mem == NULL) {
+        /* Wrong state no need to do anything */
+        return;
+    }
+
     PRINTK(KERN_DEBUG "xen_shm: mn release @%p\n", data);
     __xen_shm_unmap_receiver_grant_pages(data, 0, data->pages_count - 1);
 }
