@@ -56,5 +56,7 @@ int main(int argc, char **argv) {
     printf("I will now close the pipe\n");
     xen_shm_pipe_free(pipe);
 
+    return 0;
+
 }
 
