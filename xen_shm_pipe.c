@@ -182,7 +182,11 @@ int xen_shm_pipe_wait(xen_shm_pipe_p pipe, unsigned long timeout_ms) {
     wait.request_flags = XEN_SHM_IOCTL_AWAIT_INIT;
     wait.timeout_ms = timeout_ms;
 
-    return ioctl(p->fd, XEN_SHM_IOCTL_AWAIT, &wait);
+    if((retval = ioctl(p->fd, XEN_SHM_IOCTL_AWAIT, &wait))) {
+        return retval;
+    }
+    return (wait.remaining_ms==0)?ETIME:0;
+
 }
 
 
