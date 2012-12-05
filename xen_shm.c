@@ -975,9 +975,11 @@ xen_shm_open(struct inode * inode, struct file * filp)
 
     return 0;
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(3, 0, 0)
 clean:
     kfree(instance_data);
     return -ENOMEM;
+#endif /* LINUX_VERSION_CODE > KERNEL_VERSION(3, 0, 0) */
 }
 
 
@@ -1163,9 +1165,9 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
             // Allocate pages
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
             for(offset = 0; offset < data->pages_count - 1; ++offset) {
-                data->user_pages = alloc_page(GFP_KERNEL | __GFP_HIGHMEM);
+                data->user_pages[offset] = alloc_page(GFP_KERNEL | __GFP_HIGHMEM);
                 if (data->user_pages == NULL) {
-                printk(KERN_WARNING "xen_shm: Unable to get enough pages\n", err);
+                    printk(KERN_WARNING "xen_shm: Unable to get enough pages\n");
                     goto clean_pages;
                 }
             }
@@ -1253,7 +1255,7 @@ clean_pages:
         if (data->user_pages == NULL) {
             return -EFAULT;
         } else {
-            __free_page(data->user_pages);
+            __free_page(data->user_pages[offset]);
         }
     }
 #else
