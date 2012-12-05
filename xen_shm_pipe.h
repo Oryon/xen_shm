@@ -48,7 +48,6 @@ typedef enum {
 int xen_shm_pipe_init(xen_shm_pipe_p * pipe,  /* A returned pointer to a pipe */
                       xen_shm_pipe_mod mod,   /* The pipe mod (writer or reader) */
                       xen_shm_pipe_conv conv,  /* The convention of the pipe */
-                      uint8_t page_count
                       );
 
 /*
@@ -60,10 +59,10 @@ int xen_shm_pipe_getdomid(xen_shm_pipe_p pipe, uint32_t* receiver_domid);
 
 /* 2. Send the domid to the offerer */
 
-/* 3. Receive offerer's domid and grant ref */
+/* 3. Receive offerer's domid, grant ref and page_count */
 
 /* 4. Connects with the offerer */
-int xen_shm_pipe_connect(xen_shm_pipe_p pipe, uint32_t offerer_domid, uint32_t grant_ref);
+int xen_shm_pipe_connect(xen_shm_pipe_p pipe, uint8_t page_count, uint32_t offerer_domid, uint32_t grant_ref);
 
 
 /*
@@ -73,9 +72,9 @@ int xen_shm_pipe_connect(xen_shm_pipe_p pipe, uint32_t offerer_domid, uint32_t g
 /* 1. Receive receiver's domid */
 
 /* 2. Sets it, start sharing and get offerer's domid and grant ref */
-int xen_shm_pipe_offers(xen_shm_pipe_p pipe, uint32_t receiver_domid, uint32_t* offerer_domid, uint32_t* grant_ref);
+int xen_shm_pipe_offers(xen_shm_pipe_p pipe, uint8_t page_count, uint32_t receiver_domid, uint32_t* offerer_domid, uint32_t* grant_ref);
 
-/* 3. Sends offerer domid and grant ref to the receiver */
+/* 3. Sends offerer domid, grant ref and page_count to the receiver */
 
 /* 4. Waits for the receiver to connect */
 int xen_shm_pipe_wait(xen_shm_pipe_p pipe, unsigned long timeout_ms);
@@ -92,7 +91,7 @@ ssize_t xen_shm_pipe_read(xen_shm_pipe_p pipe, void* buf, size_t nbytes);
 /*
  * All pipes must be freed when they are not used anymore.
  */
-int xen_shm_pipe_free(xen_shm_pipe_p);
+void xen_shm_pipe_free(xen_shm_pipe_p);
 
 
 
