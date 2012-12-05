@@ -21,6 +21,10 @@
 #ifndef __XEN_SHM_H__
 #define __XEN_SHM_H__
 
+#ifndef MODULE
+# include <stdint.h>
+#endif
+
 #include <linux/ioctl.h>
 #include <xen/grant_table.h>
 
