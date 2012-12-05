@@ -611,8 +611,8 @@ __xen_shm_mn_invl_page(struct mmu_notifier *mn,
                        struct mm_struct *mm,
                        unsigned long address)
 {
-         PRINTK(KERN_DEBUG "xen_shm: Invalidating page %lu\n", address);
-        __xen_shm_mn_invl_range_start(mn, mm, address, address + PAGE_SIZE);
+    PRINTK(KERN_DEBUG "xen_shm: Invalidating page %lu\n", address);
+    __xen_shm_mn_invl_range_start(mn, mm, address, address + PAGE_SIZE);
 }
 
 
