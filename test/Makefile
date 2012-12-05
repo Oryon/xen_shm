@@ -43,9 +43,9 @@ waiter: waiter.o
 notifyer: notifyer.o
 	$(LINK.c) $^ $(LOADLIBES) -o $@
 	
-pipe_reader: pipe_reader.o
+pipe_reader: pipe_reader.o ../xen_shm_pipe.o
 	$(LINK.c) $^ $(LOADLIBES) -o $@
 	
-pipe_writer: pipe_writer.o
+pipe_writer: pipe_writer.o ../xen_shm_pipe.o
 	$(LINK.c) $^ $(LOADLIBES) -o $@	
 	
