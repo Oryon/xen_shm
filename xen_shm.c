@@ -30,6 +30,7 @@
 #include <linux/fs.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
+#include <linux/mmu_notifier.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/sched.h>
@@ -114,6 +115,9 @@ typedef uint8_t xen_shm_meta_page_state;
 struct xen_shm_instance_data {
     enum xen_shm_state_t state; //The state of this instance
 
+    /* Use PTE or nor ?*/
+    int use_ptemod;
+
     /* Pages info */
     uint8_t pages_count;               //The total number of consecutive allocated pages (with the header page)
     unsigned long shared_memory;       //The kernel addresses of the allocated pages on the offerrer
@@ -145,10 +149,16 @@ struct xen_shm_instance_data {
 
     /* Receiver only */
     struct vm_struct *unmapped_area;  //Receiver only: Virtual memeroy space allocated on the receiver
-    unsigned long user_mapped_memory; //Receiver only: Address where the user have mapped the shared memory
-    struct page **user_pages;         //Receiver only: Pages for the user
+    struct vm_area_struct *user_mem;  //Receiver only: Address where the user have mapped the shared memory
+    struct page *user_pages[XEN_SHM_ALLOC_ALIGNED_PAGES];
 
-    grant_handle_t grant_map_handles[XEN_SHM_ALLOC_ALIGNED_PAGES]; //Receiver only: pages_count grant handles
+    grant_handle_t         grant_map_handles[XEN_SHM_ALLOC_ALIGNED_PAGES]; //Receiver only: pages_count grant handles
+    struct gnttab_map_grant_ref      map_ops[XEN_SHM_ALLOC_ALIGNED_PAGES];
+    struct gnttab_unmap_grant_ref  unmap_ops[XEN_SHM_ALLOC_ALIGNED_PAGES];
+    struct gnttab_map_grant_ref     kmap_ops[XEN_SHM_ALLOC_ALIGNED_PAGES];
+
+    struct mm_struct *mm;
+    struct mmu_notifier mn;
 };
 
 /*
@@ -323,6 +333,58 @@ __xen_shm_close_ec_offerer(struct xen_shm_instance_data* data)
 /**********************************************************************************/
 
 
+/******************************
+ * User mapped memory helpers *
+ ******************************/
+
+static int
+__xen_shm_contruct_receiver_k_ops(pte_t *pte, pgtable_t token, unsigned long addr, void *inc)
+{
+    struct xen_shm_instance_data *data;
+    struct xen_shm_meta_page_data* meta_page_p;
+    unsigned int offset;
+    u64 pte_maddr;
+
+    data = (struct xen_shm_instance_data*) inc;
+    offset = (addr - data->user_mem->vm_start) >> PAGE_SHIFT;
+    pte_maddr = arbitrary_virt_to_machine(pte).maddr;
+    meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
+
+    gnttab_set_map_op(data->map_ops + offset, pte_maddr,
+                      GNTMAP_host_map | GNTMAP_application_map | GNTMAP_contains_pte,
+                      meta_page_p->grant_refs[offset + 1], data->distant_domid);
+    gnttab_set_unmap_op(data->unmap_ops + offset, pte_maddr,
+                      GNTMAP_host_map | GNTMAP_application_map | GNTMAP_contains_pte,
+                      -1 /* Non valid handler */);
+    return 0;
+}
+
+
+static void
+__xen_shm_unmap_receiver_grant_pages(struct xen_shm_instance_data *data, int offset, int nb)
+{
+    while(nb > 0) {
+        if (data->unmap_ops[offset].handle != -1) {
+            if (gnttab_unmap_refs(data->unmap_ops + offset, data->user_pages + offset, 1, true)) {
+                printk(KERN_WARNING "xen_shm: error while unmapping refs\n");
+            }
+            --nb;
+        }
+        ++offset;
+        if (offset >= data->pages_count - 1) {
+            if (nb != 0) {
+                printk(KERN_WARNING "xen_shm: Still %i pages to unmap but no more space\n", nb);
+            }
+            return;
+        }
+    }
+}
+
+
+
+/**********************************************************************************/
+
+
 /*********************
  * Memory management *
  *********************/
@@ -428,23 +490,9 @@ __xen_shm_prepare_free(struct xen_shm_instance_data* data, bool first)
 
             return 0;
         case XEN_SHM_STATE_RECEIVER_MAPPED:
-#if DEBUG
-            free_pages(data->user_mapped_memory, data->offerer_alloc_order);
-#else
-            /* Try to unmap all user-mapped pages */
-            while (data->pages_count > 1) {
-                gnttab_set_unmap_op(&unmap_op, data->user_mapped_memory + PAGE_SIZE * (data->pages_count - 2), GNTMAP_host_map, data->grant_map_handles[data->pages_count - 1]);
-                HYPERVISOR_grant_table_op(GNTTABOP_unmap_grant_ref, &unmap_op, 1);
-                if (unmap_op.status == 0) {
-                    data->pages_count--;
-                } else {
-                    if (first) {
-                        printk(KERN_WARNING "xen_shm: Could not unmap a 'user'-mapped page in receiver mode. Error:%i !\n", unmap_op.status);
-                    }
-                    goto fail;
-                }
+            if (!data->use_ptemod) {
+                 __xen_shm_unmap_receiver_grant_pages(data, 0, data->pages_count - 1);
             }
-#endif
             // Continue ! (no break)
         case XEN_SHM_STATE_RECEIVER:
             // Unmap the first page
@@ -508,6 +556,65 @@ __xen_shm_free_delayed_queue(void)
     }
 }
 #endif /* (DELAYED_FREE_ON_CLOSE || DELAYED_FREE_ON_OPEN) */
+
+
+
+/**********************************************************************************/
+
+
+/***************************
+ * mmu_notifier operations *
+ ***************************/
+
+static void
+__xen_shm_mn_invl_range_start(struct mmu_notifier *mn,
+                              struct mm_struct *mm,
+                              unsigned long start, unsigned long end)
+{
+    struct xen_shm_instance_data *data;
+    unsigned long mstart, mend;
+
+    data = container_of(mn, struct xen_shm_instance_data, mn);
+
+    if (data->user_mem == NULL) {
+        /* Wrong state no need to do anything */
+        return;
+    }
+    if (start >= data->user_mem->vm_end || data->user_mem->vm_start >= end) {
+        /* Not sthe right area */
+        return;
+    }
+    mstart = max(start, data->user_mem->vm_start);
+    mend   = min(end,   data->user_mem->vm_end);
+    __xen_shm_unmap_receiver_grant_pages(data, (mstart - data->user_mem->vm_start) >> PAGE_SHIFT, (mend - mstart) >> PAGE_SHIFT);
+}
+
+
+static void
+__xen_shm_mn_invl_page(struct mmu_notifier *mn,
+                       struct mm_struct *mm,
+                       unsigned long address)
+{
+        __xen_shm_mn_invl_range_start(mn, mm, address, address + PAGE_SIZE);
+}
+
+
+static void
+__xen_shm_mn_release(struct mmu_notifier *mn,
+                     struct mm_struct *mm)
+{
+    struct xen_shm_instance_data *data;
+
+    data = container_of(mn, struct xen_shm_instance_data, mn);
+    __xen_shm_unmap_receiver_grant_pages(data, 0, data->pages_count - 1);
+}
+
+
+struct mmu_notifier_ops xen_shm_mmu_ops = {
+        .invalidate_range_start = __xen_shm_mn_invl_range_start,
+        .invalidate_page        = __xen_shm_mn_invl_page,
+        .release                = __xen_shm_mn_release,
+};
 
 
 
@@ -836,8 +943,25 @@ xen_shm_open(struct inode * inode, struct file * filp)
     instance_data->shared_memory = 0;
     instance_data->next_delayed = NULL;
     instance_data->unmapped_area = NULL;
+    instance_data->user_mem = NULL;
     instance_data->initial_signal = 0;
     instance_data->user_signal = 0;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
+    instance_data->use_ptemod = 0;
+#else /* LINUX_VERSION_CODE > KERNEL_VERSION(3, 0, 0) */
+    instance_data->use_ptemod = xen_pv_domain();
+    if (instance_data->use_ptemod) {
+        instance_data->mm = get_task_mm(current);
+        if (instance_data->mm == NULL) {
+            goto clean;
+        }
+        instance_data->mn.ops = &xen_shm_mmu_ops;
+        if (mmu_notifier_register(&instance_data->mn, instance_data->mm) != 0) {
+            goto clean;
+        }
+        mmput(instance_data->mm);
+    }
+#endif /* LINUX_VERSION_CODE ?KERNEL_VERSION(3, 0, 0) */
 
     filp->private_data = (void *) instance_data;
 
@@ -850,6 +974,10 @@ xen_shm_open(struct inode * inode, struct file * filp)
     init_waitqueue_head(&instance_data->wait_queue);
 
     return 0;
+
+clean:
+    kfree(instance_data);
+    return -ENOMEM;
 }
 
 
@@ -994,14 +1122,10 @@ static int
 xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
 {
     struct xen_shm_instance_data* data;
-
-#if !DEBUG
-    int page, err;
-    struct gnttab_map_grant_ref map_op;
-    struct gnttab_unmap_grant_ref unmap_op;
     struct xen_shm_meta_page_data* meta_page_p;
-    phys_addr_t page_pointer;
-#endif
+    int offset, err;
+    unsigned dummy;
+    phys_addr_t addr;
 
     if ((vma->vm_flags & VM_WRITE) && !(vma->vm_flags & VM_SHARED)) {
         return -EINVAL;
@@ -1030,59 +1154,82 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
                 printk(KERN_WARNING "xen_shm: Only mapping of the right size are accepted\n");
                 return -EINVAL;
             }
-#if DEBUG
-            data->user_mapped_memory = (phys_addr_t) __get_free_pages(GFP_KERNEL, data->pages_count);
-            return remap_pfn_range(vma, vma->vm_start, virt_to_pfn(data->user_mapped_memory), vma->vm_end - vma->vm_start, vma->vm_page_prot);
-#else
+
             /* Setting the correct flags */
             vma->vm_flags |= VM_RESERVED|VM_DONTEXPAND;
+            if (data->use_ptemod) {
+                vma->vm_flags |= VM_DONTCOPY;
+            }
             // Allocate pages
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
-            data->user_pages = alloc_empty_pages_and_pagevec(data->pages_count - 1);
-            if (data->user_pages == NULL) {
-                printk(KERN_WARNING "xen_shm: Unable to pages\n");
-                return -ENOMEM;
+            for(offset = 0; offset < data->pages_count - 1; ++offset) {
+                data->user_pages = alloc_page(GFP_KERNEL | __GFP_HIGHMEM);
+                if (data->user_pages == NULL) {
+                printk(KERN_WARNING "xen_shm: Unable to get enough pages\n", err);
+                    goto clean_pages;
+                }
             }
 #else
-            data->user_pages = kcalloc(data->pages_count - 1, sizeof(data->user_pages[0]), GFP_KERNEL);
-            if (data->user_pages == NULL) {
-                printk(KERN_WARNING "xen_shm: Unable to allocate table space\n");
-                return -ENOMEM;
-            }
             err = alloc_xenballooned_pages(data->pages_count - 1, data->user_pages, false);
             if (err != 0) {
                 printk(KERN_WARNING "xen_shm: Unable to get xenballooned_pages : %i\n", err);
-                goto free_pages;
+                goto clean_pages;
             }
 #endif
-            // Ok, map logical memory
+            /* Store the vm_area_struct for latter use */
+            data->user_mem = vma;
+            /* Create map ops */
             meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
-            page_pointer = vma->vm_start;
-            for (page = 0; page < data->pages_count - 1; ++page) {
-                printk(KERN_INFO "Mmapping@ %p %p %p\n", data->user_pages[page], pfn_to_kaddr(page_to_pfn(data->user_pages[page])), (void*)page_pointer);
-                gnttab_set_map_op(&map_op, (phys_addr_t)pfn_to_kaddr(page_to_pfn(data->user_pages[page])), GNTMAP_host_map | GNTMAP_application_map, meta_page_p->grant_refs[page + 1], data->distant_domid);
-
-                err = gnttab_map_refs(&map_op, NULL, data->user_pages + page, 1);
+            if (data->use_ptemod) {
+                err = apply_to_page_range(vma->vm_mm, vma->vm_start, vma->vm_end - vma->vm_start, __xen_shm_contruct_receiver_k_ops, data);
                 if (err != 0) {
-                    printk(KERN_WARNING "xen_shm: Unable to grant ref (err  %i)\n", err);
-                    err = -EFAULT;
-                    goto clean;
+                    printk(KERN_WARNING " apply_to_page_range __xen_shm_contruct_receiver_k_ops faile : %i\n", err);
+                    goto clean_pages;
                 }
-
-                data->grant_map_handles[page + 1] = map_op.handle;
-
-                err = vm_insert_page(vma, page_pointer, data->user_pages[page]);
-                if (err != 0) {
-                    ++page;
-                    printk(KERN_WARNING "xen_shm:  vm_insert_page failure\n");
-                    goto clean;
+                for(offset = 0; offset < data->pages_count - 1; ++offset) {
+                    addr = (phys_addr_t) pfn_to_kaddr(page_to_pfn(data->user_pages[offset]));
+                    addr = arbitrary_virt_to_machine(lookup_address(addr, &dummy)).maddr;
+                    gnttab_set_map_op(data->kmap_ops + offset, addr, GNTMAP_host_map | GNTMAP_contains_pte, meta_page_p->grant_refs[offset + 1], data->distant_domid);
                 }
-                page_pointer += PAGE_SIZE;
+            } else {
+                for(offset = 0; offset < data->pages_count - 1; ++offset) {
+                    addr = (phys_addr_t) pfn_to_kaddr(page_to_pfn(data->user_pages[offset]));
+                    gnttab_set_map_op(data->map_ops + offset, addr, GNTMAP_host_map, meta_page_p->grant_refs[offset + 1], data->distant_domid);
+                    gnttab_set_unmap_op(data->unmap_ops + offset, GNTMAP_host_map, meta_page_p->grant_refs[offset + 1], -1/* Non valid handler */);
+                }
             }
-            data->user_mapped_memory = vma->vm_start;
+            /* Map everything ! */
+            err = gnttab_map_refs(data->map_ops, data->use_ptemod ? data->kmap_ops : NULL, data->user_pages, data->pages_count - 1);
+            /* Check */
+            if (err != 0) {
+                printk(KERN_WARNING "xen_shm: Unable to grant ref (err  %i)\n", err);
+                err = -EFAULT;
+                goto clean;
+            }
+            for (offset = 0; offset < data->pages_count - 1; ++offset) {
+                if (data->map_ops[offset].status != 0) {
+                    err = -EINVAL;
+                } else {
+                    data->unmap_ops[offset].handle = data->map_ops[offset].handle;
+                }
+            }
+            if (err != 0) {
+                printk(KERN_WARNING "xen_shm: Some grant failed !\n");
+                err = -EFAULT;
+                goto clean;
+            }
+            if (!data->use_ptemod) {
+                for (offset = 0; offset < data->pages_count - 1; ++offset) {
+                    err = vm_insert_page(vma, vma->vm_start + (offset * PAGE_SIZE), data->user_pages[offset]);
+                    if (err != 0) {
+                        printk(KERN_WARNING "xen_shm: vm_insert_page failed: %i\n", err);
+                        goto clean;
+                    }
+                }
+            }
+            /* State change ! */
             data->state = XEN_SHM_STATE_RECEIVER_MAPPED;
             return 0;
-#endif
         default:
             printk(KERN_WARNING "xen_shm: Impossible state !\n");
             break;
@@ -1090,20 +1237,27 @@ xen_shm_mmap(struct file *filp, struct vm_area_struct *vma)
 
     return -ENOSYS;
 
-#if !DEBUG
-clean:
-    for (--page; page >= 0; --page) {
-        gnttab_set_unmap_op(&unmap_op, (phys_addr_t)pfn_to_kaddr(page_to_pfn(data->user_pages[page - 1])), GNTMAP_host_map, data->grant_map_handles[page]);
-        gnttab_unmap_refs(&unmap_op, data->user_pages + page, 1, 0);
-    }
 
+clean:
+    for (offset = 0; offset < data->pages_count - 1; ++offset) {
+        if (data->unmap_ops[offset].handle != -1) {
+            if (gnttab_unmap_refs(data->unmap_ops + offset, data->user_pages + offset, 1, true)) {
+                printk(KERN_WARNING "xen_shm: error while unmapping refs\n");
+            }
+        }
+    }
+clean_pages:
+    data->user_mem = NULL;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
-    free_empty_pages_and_pagevec(data->user_pages, data->pages_count - 1);
+    for(offset = 0; offset < data->pages_count - 1; ++offset) {
+        if (data->user_pages == NULL) {
+            return -EFAULT;
+        } else {
+            __free_page(data->user_pages);
+        }
+    }
 #else
     free_xenballooned_pages(data->pages_count - 1, data->user_pages);
-free_pages:
-    kfree(data->user_pages);
-#endif
 #endif
     return -EFAULT;
 }
@@ -1172,6 +1326,10 @@ xen_shm_release(struct inode * inode, struct file * filp)
     //Try to close other delayed close
     __xen_shm_free_delayed_queue();
 #endif /* DELAYED_FREE_ON_CLOSE */
+
+    if (data->use_ptemod) {
+        mmu_notifier_unregister(&data->mn, data->mm);
+    }
 
     return 0;
 }
