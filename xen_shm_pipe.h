@@ -47,7 +47,7 @@ typedef enum {
  */
 int xen_shm_pipe_init(xen_shm_pipe_p * pipe,  /* A returned pointer to a pipe */
                       xen_shm_pipe_mod mod,   /* The pipe mod (writer or reader) */
-                      xen_shm_pipe_conv conv,  /* The convention of the pipe */
+                      xen_shm_pipe_conv conv  /* The convention of the pipe */
                       );
 
 /*
