@@ -27,8 +27,8 @@
 /* Private data about the pipe */
 struct xen_shm_pipe_priv {
     int fd;
-    enum  mod;
-    enum xen_shm_pipe_mod conv;
+    enum xen_shm_pipe_mod mod;
+    enum xen_shm_pipe_conv conv;
 
     struct xen_shm_pipe_shared* shared;
 
@@ -44,11 +44,11 @@ struct xen_shm_pipe_shared {
     uint8_t buffer[1];
 };
 
-int inline __xen_shm_pipe_is_offerer(struct xen_shm_pipe_priv* p);
+inline int __xen_shm_pipe_is_offerer(struct xen_shm_pipe_priv* p);
 int __xen_shm_pipe_map_shared_memory(struct xen_shm_pipe_priv* p, uint8_t page_count);
 
 
-int inline
+inline int
 __xen_shm_pipe_is_offerer(struct xen_shm_pipe_priv* p)
 {
     return (p->mod==xen_shm_pipe_mod_read && p->conv==xen_shm_pipe_conv_reader_offers)
