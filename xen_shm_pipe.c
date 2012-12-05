@@ -10,9 +10,13 @@
  *
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <inttypes.h>
 #include <sys/ioctl.h>
 #include <errno.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include "xen_shm_pipe.h"
 #include "xen_shm.h"
@@ -40,6 +44,10 @@ struct xen_shm_pipe_shared {
     uint8_t buffer[1];
 };
 
+int inline __xen_shm_pipe_is_offerer(struct xen_shm_pipe_priv* p);
+int __xen_shm_pipe_map_shared_memory(struct xen_shm_pipe_priv* p, uint8_t page_count);
+
+
 int inline
 __xen_shm_pipe_is_offerer(struct xen_shm_pipe_priv* p)
 {
@@ -66,7 +74,6 @@ int
 xen_shm_pipe_init(xen_shm_pipe_p * pipe,xen_shm_pipe_mod mod,xen_shm_pipe_conv conv)
 {
     struct xen_shm_pipe_priv* p = malloc(sizeof(struct xen_shm_pipe_priv));
-    int retval;
 
     if(p==NULL)
         return ENOMEM;
@@ -120,7 +127,7 @@ xen_shm_pipe_offers(xen_shm_pipe_p pipe, uint8_t page_count,
     }
 
     init_offerer.pages_count = page_count;
-    init_offerer.dist_domid = receiver_domid;
+    init_offerer.dist_domid = (domid_t) receiver_domid;
 
     retval = ioctl(p->fd, XEN_SHM_IOCTL_INIT_OFFERER, &init_offerer);
     if (retval != 0) {
@@ -133,8 +140,8 @@ xen_shm_pipe_offers(xen_shm_pipe_p pipe, uint8_t page_count,
         return retval;
     }
 
-    *offerer_domid = init_offerer.local_domid;
-    *grant_ref = init_offerer.grant;
+    *offerer_domid = (uin32_t) init_offerer.local_domid;
+    *grant_ref = (uin32_t) init_offerer.grant;
     p->buffer_size = page_count*XEN_SHM_PIPE_PAGE_SIZE - sizeof(struct xen_shm_pipe_shared) + 1;
 
     return 0;
@@ -201,7 +208,7 @@ int xen_shm_pipe_free(xen_shm_pipe_p pipe) {
         munmap(p->shared, p->buffer_size + sizeof(struct xen_shm_pipe_shared) - 1);
     }
 
-    fclose(p->fd);
+    close(p->fd);
     free(pipe);
 }
 
