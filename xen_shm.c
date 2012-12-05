@@ -216,7 +216,7 @@ xen_shm_event_handler(int irq, void* arg)
     data = (struct xen_shm_instance_data*) arg;
 
     printk(KERN_WARNING "xen_shm: A signal has just been handled\n");
-    if(data->initial_signal) {
+    if(!data->initial_signal) {
         if(data->state == XEN_SHM_STATE_OFFERER) { //Responds to the initial signal
             notify_remote_via_evtchn(data->local_ec_port);
         }
