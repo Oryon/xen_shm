@@ -26,9 +26,9 @@
 #define XEN_SHM_PIPE_UPDATE_SIZE 256 //When write or read, updates pointers at list every <value> red or written bytes
 
 /* Different reader/writer flags */
-#define XSHMP_OPENED  0x00000001
-#define XSHMP_CLOSED  0x00000002
-#define XSHMP_WAITING 0x00000004
+#define XSHMP_OPENED  0x00000001u
+#define XSHMP_CLOSED  0x00000002u
+#define XSHMP_WAITING 0x00000004u
 
 /* Private data about the pipe */
 struct xen_shm_pipe_priv {
@@ -259,7 +259,7 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
     int retval;
     int32_t pointer_diff;
 
-    int32_t to_read;
+    uint32_t to_read;
     uint8_t* current_buf;   /*Where we will write*/
     uint8_t* max_buf;       /*Can't write further*/
     uint8_t* tmp_max_buf;   /*Where we can't write anymore*/
@@ -316,7 +316,7 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
             to_read = XEN_SHM_PIPE_UPDATE_SIZE;
 
         if(to_read > (uint32_t) (max_buf - current_buf)) //We can't read more than asked
-            to_read = nbytes;
+            to_read = (uint32_t) nbytes;
 
         tmp_max_buf = current_buf + to_read; //Prepare end of reading
         read_pointer = &(s->buffer[s->read]); //Prepare read pointer
@@ -332,7 +332,7 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
             read_pointer = s->buffer;
         }
 
-        s->read = read_pointer - s->buffer;
+        s->read = (uint32_t) (read_pointer - s->buffer);
 
         //If the writer is waiting, notify
         if(s->writer_flags & XSHMP_WAITING) {
@@ -342,7 +342,7 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
     }
 
 
-    return (size_t) (current_buf - (uint8_t*) buf);
+    return (ssize_t) (current_buf - (uint8_t*) buf);
 
 }
 
