@@ -8,7 +8,7 @@
 
 /*
  * Convention writer_offers
- * This is the RECEIVER
+ * This is the OFFERER
  */
 
 #define PAGE_COUNT 1
@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
 
     printf("Pipe writer now starting\n");
 
-    if((retval = xen_shm_pipe_init(&pipe, write, writer_offers))) {
+    if((retval = xen_shm_pipe_init(&pipe, xen_shm_pipe_mod_write, xen_shm_pipe_conv_writer_offers))) {
         printf("Pipe init error %"PRIu32"\n", retval);
         return -1;
     }

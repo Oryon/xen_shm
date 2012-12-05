@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
 
     printf("Pipe reader now starting\n");
 
-    if((retval = xen_shm_pipe_init(&pipe, read, writer_offers))) {
+    if((retval = xen_shm_pipe_init(&pipe, xen_shm_pipe_mod_read, xen_shm_pipe_conv_writer_offers))) {
         printf("Pipe init error %"PRIu32"\n", retval);
         return -1;
     }
@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    printf("RECEIVER domain id: "PRIu32"\n", local_domid);
+    printf("RECEIVER domain id: %"PRIu32"\n", local_domid);
     printf("Distant domain id: ");
     if((scanf("%"SCNu32, &dist_domid)!=1)) {
         printf("Scanf error");
@@ -59,5 +59,6 @@ int main(int argc, char **argv) {
     printf("I will now close the pipe\n");
     xen_shm_pipe_free(pipe);
 
+    return 0;
 }
 
