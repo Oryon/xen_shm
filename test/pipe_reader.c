@@ -18,7 +18,7 @@
 
 static uint32_t checksum;
 static uint32_t rcv_bytes;
-static xen_shm_pipe_p pipe;
+static xen_shm_pipe_p xpipe;
 
 static void
 clean(int sig)
@@ -27,8 +27,8 @@ clean(int sig)
     if(sig >= 0) {
         printf("Signal received: %i\n", sig);
     }
-    printf("Now closing the pipe\n", sig);
-    xen_shm_pipe_free(pipe);
+    printf("Now closing the pipe\n");
+    xen_shm_pipe_free(xpipe);
 
     printf("%"PRIu32" bytes received \n", rcv_bytes);
     printf("check sum: %"PRIu32"  \n", checksum);
@@ -50,12 +50,12 @@ int main(int argc, char **argv) {
 
     printf("Pipe reader now starting\n");
 
-    if(xen_shm_pipe_init(&pipe, xen_shm_pipe_mod_read, xen_shm_pipe_conv_writer_offers)) {
+    if(xen_shm_pipe_init(&xpipe, xen_shm_pipe_mod_read, xen_shm_pipe_conv_writer_offers)) {
         perror("Pipe init");
         return -1;
     }
 
-    if(xen_shm_pipe_getdomid(pipe, &local_domid)) {
+    if(xen_shm_pipe_getdomid(xpipe, &local_domid)) {
         perror("Pipe get domid");
         return -1;
     }
@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
 
 
 
-    if(xen_shm_pipe_connect(pipe,PAGE_COUNT,dist_domid, grant_ref)) {
+    if(xen_shm_pipe_connect(xpipe,PAGE_COUNT,dist_domid, grant_ref)) {
         perror("Pipe connect");
         return -1;
     }
@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
         }
 
         while(to_read) {
-            retval = xen_shm_pipe_read(pipe,buffer,(BUFFER_SIZE>to_read)?to_read:BUFFER_SIZE);
+            retval = xen_shm_pipe_read(xpipe,buffer,(BUFFER_SIZE>to_read)?to_read:BUFFER_SIZE);
 
             if(retval == 0) {
                 printf("End of file\n");
@@ -105,10 +105,10 @@ int main(int argc, char **argv) {
                 return 0;
             }
 
-            to_read -= retval;
-            rcv_bytes += retval;
+            to_read -= (uint32_t) retval;
+            rcv_bytes += (uint32_t) retval;
             for(i=0; i<retval; ++i) {
-                checksum = checksum + ((uint32_t) buffer[ ((int) offset) + i] + 10)*((uint32_t) buffer[ ((int) offset) + i] + 20);
+                checksum = checksum + ((uint32_t) buffer[i] + 10)*((uint32_t) buffer[i] + 20);
             }
             printf("\r%"PRIu32, rcv_bytes);
         }

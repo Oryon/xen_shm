@@ -18,7 +18,7 @@
 
 static uint32_t checksum;
 static uint32_t sent_bytes;
-static xen_shm_pipe_p pipe;
+static xen_shm_pipe_p xpipe;
 
 static void
 clean(int sig)
@@ -27,8 +27,8 @@ clean(int sig)
     if(sig > 0) {
         printf("Signal received: %i\n", sig);
     }
-    printf("Now closing the pipe\n", sig);
-    xen_shm_pipe_free(pipe);
+    printf("Now closing the pipe\n");
+    xen_shm_pipe_free(xpipe);
 
     printf("%"PRIu32" bytes sent \n", sent_bytes);
     printf("check sum: %"PRIu32"  \n", checksum);
@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
 
     printf("Pipe writer now starting\n");
 
-    if(xen_shm_pipe_init(&pipe, xen_shm_pipe_mod_write, xen_shm_pipe_conv_writer_offers)) {
+    if(xen_shm_pipe_init(&xpipe, xen_shm_pipe_mod_write, xen_shm_pipe_conv_writer_offers)) {
         perror("Pipe init");
         return -1;
     }
@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
     }
 
 
-    if(xen_shm_pipe_offers(pipe, PAGE_COUNT, dist_domid, &local_domid, &grant_ref)) {
+    if(xen_shm_pipe_offers(xpipe, PAGE_COUNT, dist_domid, &local_domid, &grant_ref)) {
         perror("Pipe get domid");
         return -1;
     }
@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
     printf("Grant reference id: %"PRIu32"\n", grant_ref);
 
     printf("Will now wait for at most 30 seconds\n");
-    if(xen_shm_pipe_wait(pipe, 30*1000)) {
+    if(xen_shm_pipe_wait(xpipe, 30*1000)) {
         perror("Pipe wait");
         return -1;
     }
@@ -95,14 +95,14 @@ int main(int argc, char **argv) {
         msg_len = (size_t) stdin_read;
         offset = 0;
         while(offset != msg_len) {
-            retval = xen_shm_pipe_write(pipe, buffer+offset, msg_len-offset);
+            retval = xen_shm_pipe_write(xpipe, buffer+offset, msg_len-offset);
             if(retval <= 0) {
                 perror("xen pipe write");
                 clean(0);
                 return 0;
             }
             offset+= (size_t) retval;
-            sent_bytes+=retval;
+            sent_bytes+=(uint32_t) retval;
             for(i=0; i<retval; ++i) {
                 checksum = checksum + ((uint32_t) buffer[ ((int) offset) + i] + 10)*((uint32_t) buffer[ ((int) offset) + i] + 20);
             }
