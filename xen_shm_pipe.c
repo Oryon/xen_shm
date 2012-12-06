@@ -263,6 +263,7 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
     struct xen_shm_pipe_priv* p;
     struct xen_shm_pipe_shared* s;
     struct xen_shm_ioctlarg_await await_op;
+    int ioctl_ret;
 
     uint8_t* user_buf; //A cast of the given user buffer
 
@@ -291,36 +292,44 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
 
     s = p->shared;
     if(s->reader_flags & XSHMP_CLOSED) {//Closed
-        printf("I closed this pipe !\n");
         return 0;
     }
+
+    //Prepare wait structure
+    await_op.request_flags = XEN_SHM_IOCTL_AWAIT_USER;
+    await_op.timeout_ms = 0;
+
+    shared_max = s->buffer + (ptrdiff_t) p->buffer_size;
 
     read_pos = s->buffer + (ptrdiff_t) s->read ;
     write_pos = s->buffer + (ptrdiff_t) s->write ;
 
     //Wait for available data
     while(read_pos == write_pos) {
-        if(s->writer_flags & XSHMP_CLOSED) //Maybe it was gracefully closed
-            return 0;
-
-        //Prepare wait structure
-        await_op.request_flags = XEN_SHM_IOCTL_AWAIT_USER;
-        await_op.timeout_ms = 0;
-
         s->reader_flags |= XSHMP_WAITING; //Notify that we are waiting
-        if(ioctl(p->fd, XEN_SHM_IOCTL_AWAIT, &await_op)) {
-            if(errno == EPIPE) { //The memory is now closed on the other side
-                if(s->writer_flags & XSHMP_CLOSED) { //Maybe it was gracefully closed
-                    printf("The other guy closed this file !\n");
-                    return 0;
-                }
-                return -1;
-            }
-            return -1; //Another error
+
+        if(s->writer_flags & XSHMP_CLOSED){ //Maybe it was gracefully closed
+            s->reader_flags &= ~XSHMP_WAITING; //Stop waiting
+            return 0;
         }
+
+        ioctl_ret = ioctl(p->fd, XEN_SHM_IOCTL_AWAIT, &await_op);
 
         read_pos = s->buffer + (ptrdiff_t) s->read ;
         write_pos = s->buffer + (ptrdiff_t) s->write ;
+
+        if(ioctl_ret) {
+            if(errno == EPIPE) { //Other side is not here
+                if(read_pos == write_pos) { //We read everything
+                    s->reader_flags &= ~XSHMP_WAITING; //Stop waiting
+                    return (s->writer_flags & XSHMP_CLOSED)?0:-1;
+                } //Ignore error and read
+                break;
+            }//True error (like interrupt)
+            s->reader_flags &= ~XSHMP_WAITING; //Stop waiting
+            return -1;
+        }
+
     }
     s->reader_flags &= ~XSHMP_WAITING; //Stop waiting
 
@@ -332,8 +341,6 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
     gran_max_buf = user_buf + (ptrdiff_t) XEN_SHM_PIPE_UPDATE_SIZE;
     circ_max_buf = user_buf;
     min_max_buf = user_buf;
-
-    shared_max = s->buffer + (ptrdiff_t) p->buffer_size;
 
     while(read_pos != write_pos && current_buf != usr_max_buf) //We read as much as we can
     {
@@ -430,6 +437,10 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
         return -1;
     }
 
+    //Prepare wait structure
+    await_op.request_flags = XEN_SHM_IOCTL_AWAIT_USER;
+    await_op.timeout_ms = 0;
+
     shared_max = s->buffer + (ptrdiff_t) p->buffer_size;
 
     read_pos_reduced = s->buffer + (ptrdiff_t) s->read;
@@ -442,10 +453,6 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
             errno = EPIPE;
             return -1;
         }
-
-        //Prepare wait structure
-        await_op.request_flags = XEN_SHM_IOCTL_AWAIT_USER;
-        await_op.timeout_ms = 0;
 
         s->writer_flags |= XSHMP_WAITING; //Notify that we are waiting
         if(ioctl(p->fd, XEN_SHM_IOCTL_AWAIT, &await_op)) {
