@@ -291,6 +291,7 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
 
     s = p->shared;
     if(s->reader_flags & XSHMP_CLOSED) {//Closed
+        printf("I closed this pipe !\n");
         return 0;
     }
 
@@ -310,6 +311,7 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
         if(ioctl(p->fd, XEN_SHM_IOCTL_AWAIT, &await_op)) {
             if(errno == EPIPE) { //The memory is now closed on the other side
                 if(s->writer_flags & XSHMP_CLOSED) { //Maybe it was gracefully closed
+                    printf("The other guy closed this file !\n");
                     return 0;
                 }
                 return -1;
