@@ -108,16 +108,16 @@ int main(int argc, char **argv) {
 
             to_read -= (uint32_t) retval;
             rcv_bytes += (uint64_t) retval;
-            for(i=0; i<retval; ++i) {
-                checksum = checksum + ((uint32_t) buffer[i] + 10)*((uint32_t) buffer[i] + 20);
+            //for(i=0; i<retval; ++i) {
+            //    checksum = checksum + ((uint32_t) buffer[i] + 10)*((uint32_t) buffer[i] + 20);
                 //printf("Checksum with '%"PRIu8"' -- %"PRIu32"\n", buffer[i], checksum);
-            }
-            printf("\r%"PRIu64, rcv_bytes);
+            //}
+            //printf("\r%"PRIu64, rcv_bytes);
             //buffer[retval]='\0';
             //printf("%s", buffer);
-            fflush(stdout);
+            //fflush(stdout);
         }
-
+        printf("\r%"PRIu64, rcv_bytes);
 
     }
 

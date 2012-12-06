@@ -24,7 +24,7 @@
 
 #define XEN_SHM_PIPE_PAGE_SIZE 4096 //Todo, find an interface
 
-#define XEN_SHM_PIPE_UPDATE_SIZE 256 //When write or read, updates pointers at list every <value> red or written bytes
+#define XEN_SHM_PIPE_UPDATE_SIZE 2000 //When write or read, updates pointers at list every <value> red or written bytes
 
 /* Different reader/writer flags */
 #define XSHMP_OPENED  0x00000001u
