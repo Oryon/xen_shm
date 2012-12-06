@@ -60,12 +60,10 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    if(sscanf(argv[1], "%"SCNu16, &target) != 1) {
-                printf("Bad argument, need to be a domid_t\n");
-            }
+
 
     if(argc>1 && sscanf(argv[1], "%"SCNu32, &dist_domid)) {
-        rintf("Using distant domain id: %"PRIu32"\n", dist_domid);
+        printf("Using distant domain id: %"PRIu32"\n", dist_domid);
     } else {
 
         printf("Distant domain id: ");
