@@ -12,11 +12,16 @@
  */
 
 #define PAGE_COUNT 1
+#define BUFFER_SIZE 128
+
 
 int main(int argc, char **argv) {
     uint32_t local_domid;
     uint32_t dist_domid;
     uint32_t grant_ref;
+
+    ssize_t retval;
+    uint8_t buffer[BUFFER_SIZE];
 
     xen_shm_pipe_p pipe;
 
@@ -54,6 +59,19 @@ int main(int argc, char **argv) {
 
     printf("Connected successfully !\n");
     sleep(5);
+
+    printf("I will now read what is incoming\n");
+    while((retval = xen_shm_pipe_read(pipe,buffer,BUFFER_SIZE-1))>0) {
+        buffer[retval] = '\0';
+        printf("%s", buffer);
+    }
+
+    if(retval == 0) {
+        printf("End of file\n");
+    } else {
+        perror("xen pipe read");
+        return -1;
+    }
 
     printf("I will now close the pipe\n");
     xen_shm_pipe_free(pipe);

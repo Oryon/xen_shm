@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <unistd.h>
+#include <string.h>
 
 #include "../xen_shm_pipe.h"
 
@@ -12,11 +13,18 @@
  */
 
 #define PAGE_COUNT 1
+#define MESSAGE "Coucou, ça va ?\n"
+#define REPEAT 100
 
 int main(int argc, char **argv) {
     uint32_t local_domid;
     uint32_t dist_domid;
     uint32_t grant_ref;
+
+    int i;
+    size_t offset;
+    ssize_t retval;
+    size_t msg_len;
 
     xen_shm_pipe_p pipe;
 
@@ -51,6 +59,20 @@ int main(int argc, char **argv) {
 
     printf("Connected successfully !\n");
     sleep(5);
+
+    printf("I will now send %i times the message: %s\n", REPEAT, MESSAGE);
+    msg_len = strlen(MESSAGE);
+    for(i=0; i<REPEAT; i++) {
+        offset = 0;
+        while(offset != msg_len) {
+            retval = xen_shm_pipe_write(pipe, MESSAGE+offset, strlen(MESSAGE)-offset);
+            if(retval <= 0) {
+                perror("xen pipe write");
+                return -1;
+            }
+            offset+=retval;
+        }
+    }
 
     printf("I will now close the pipe\n");
     xen_shm_pipe_free(pipe);
