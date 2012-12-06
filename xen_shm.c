@@ -1295,6 +1295,11 @@ xen_shm_release(struct inode * inode, struct file * filp)
      *            Maybe we should use the first page for information purposes ? (like using a value to know if the kmalloc can be freed)
      */
 
+#if DELAYED_FREE_ON_CLOSE
+    //Try to close other delayed close
+    __xen_shm_free_delayed_queue();
+#endif /* DELAYED_FREE_ON_CLOSE */
+
     data = (struct xen_shm_instance_data*) filp->private_data;
 
     switch (data->state) {
@@ -1331,11 +1336,6 @@ xen_shm_release(struct inode * inode, struct file * filp)
     }
 
     kfree(filp->private_data);
-
-#if DELAYED_FREE_ON_CLOSE
-    //Try to close other delayed close
-    __xen_shm_free_delayed_queue();
-#endif /* DELAYED_FREE_ON_CLOSE */
 
     if (data->use_ptemod) {
         mmu_notifier_unregister(&data->mn, data->mm);
