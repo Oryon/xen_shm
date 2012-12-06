@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
     uint32_t grant_ref;
 
 
-    int i;
+    //int i;
     uint8_t buffer[BUFFER_SIZE];
     size_t offset;
     size_t msg_len;

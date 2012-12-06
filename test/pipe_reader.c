@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
     uint8_t buffer[BUFFER_SIZE];
 
     uint32_t to_read;
-    int i;
+    //int i;
 
     printf("Pipe reader now starting\n");
 
