@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
                 perror("xen pipe write");
                 return -1;
             }
-            offset+=retval;
+            offset+=(size_t)retval;
         }
     }
 
