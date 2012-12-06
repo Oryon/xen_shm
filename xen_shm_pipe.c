@@ -317,8 +317,8 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
             return -1; //Another error
         }
 
-        read_pos = &(s->buffer[s->read]);
-        write_pos = &(s->buffer[s->write]);
+        read_pos = s->buffer + (ptrdiff_t) s->read ;
+        write_pos = s->buffer + (ptrdiff_t) s->write ;
     }
     s->reader_flags &= ~XSHMP_WAITING; //Stop waiting
 
@@ -333,7 +333,6 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
 
     shared_max = s->buffer + (ptrdiff_t) p->buffer_size;
 
-    write_pos = &(s->buffer[s->write]); //Updates write_pos value (it changed if we waited)
     while(read_pos != write_pos && current_buf != usr_max_buf) //We read as much as we can
     {
 
@@ -367,22 +366,20 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
             gran_max_buf += (ptrdiff_t) XEN_SHM_PIPE_UPDATE_SIZE;
         }
 
-        if(current_buf == circ_max_buf) { //Time to check if the read pointer must be rewind
-            if(read_pos == shared_max) {
-                read_pos = s->buffer;
-                circ_max_buf = user_buf + (ptrdiff_t)(write_pos - read_pos); //We know write is to the right
-            } else {
-                if(read_pos < write_pos) {
-                    circ_max_buf = user_buf + (ptrdiff_t)(write_pos - read_pos); //Read up to write
-                } else {
-                    circ_max_buf = user_buf + (ptrdiff_t)(shared_max - read_pos); //Read up to the end of the circular buffer
-                }
-            }
+        if(read_pos == shared_max) { //Time to check if the read pointer must be rewind
+            read_pos = s->buffer;
+        }
+
+        write_pos = s->buffer + (ptrdiff_t) s->write; //Updates write_pos value (it could have changed)
+        s->read = (uint32_t) (read_pos - s->buffer); //Update read position in shared memory
+
+        if(read_pos <= write_pos) { //Updates the circ buffer threshold
+            circ_max_buf = current_buf + (ptrdiff_t)(write_pos - read_pos);
+        } else {
+            circ_max_buf = current_buf +  (ptrdiff_t)(shared_max - read_pos);
         }
 
 
-        write_pos = &(s->buffer[s->write]); //Updates write_pos value (it changed if we waited)
-        s->read = (uint32_t) (read_pos - s->buffer); //Update read position in shared memory
     }
 
     if(s->writer_flags & XSHMP_WAITING) { //Writer is waiting
@@ -390,8 +387,145 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
     }
 
 
-    return (ssize_t) (current_buf - (uint8_t*) buf);
+    return (ssize_t) (current_buf - user_buf);
 }
 
 
+
+
+ssize_t xen_shm_pipe_write(xen_shm_pipe_p pipe, const void* buf, size_t nbytes) {
+    struct xen_shm_pipe_priv* p;
+    struct xen_shm_pipe_shared* s;
+    struct xen_shm_ioctlarg_await await_op;
+
+    uint8_t* read_pos_reduced; //Read pointer - 1 in circular buffer
+    uint8_t* write_pos;//Write pointer in circ buff
+    uint8_t* shared_max; //Out of bound pointer in circ buffer
+
+    const uint8_t* user_buf; //A cast of the given user buffer
+    const uint8_t* current_buf;//Current write pos
+
+    const uint8_t* usr_max_buf;//Out of bound given by the user
+    const uint8_t* gran_max_buf;//Out of bound to check if the reader is waiting
+    const uint8_t* circ_max_buf;//Out of bound given by the circ buffer
+
+    const uint8_t* min_max_buf;//Min value of the 3 different out of bound
+
+    p = xpipe;
+    if(p->mod == xen_shm_pipe_mod_read) { //Not reader
+        errno = EMEDIUMTYPE;
+        return -1;
+    }
+
+    if(p->shared == NULL) { //Not initialized
+        errno = EMEDIUMTYPE;
+        return -1;
+    }
+
+    s = p->shared;
+    if(s->writer_flags & XSHMP_CLOSED) {//Closed
+        errno = EPIPE;
+        return -1;
+    }
+
+    shared_max = s->buffer + (ptrdiff_t) p->buffer_size;
+
+    read_pos_reduced = s->buffer + (ptrdiff_t) s->read;
+    read_pos_reduced = (read_pos_reduced == s->buffer)?(shared_max-1):(read_pos_reduced-1);
+    write_pos = s->buffer + (ptrdiff_t) s->write ;
+
+    //Wait for available space
+    while(read_pos_reduced == write_pos) {
+        if(s->reader_flags & XSHMP_CLOSED) { //Maybe it was gracefully closed
+            errno = EPIPE;
+            return -1;
+        }
+
+        //Prepare wait structure
+        await_op.request_flags = XEN_SHM_IOCTL_AWAIT_USER;
+        await_op.timeout_ms = 0;
+
+        s->writer_flags |= XSHMP_WAITING; //Notify that we are waiting
+        if(ioctl(p->fd, XEN_SHM_IOCTL_AWAIT, &await_op)) {
+            return -1; //Another error
+        }
+
+        //Update positions
+        read_pos_reduced = s->buffer + (ptrdiff_t) s->read;
+        read_pos_reduced = (read_pos_reduced == s->buffer)?(shared_max-1):(read_pos_reduced-1);
+        write_pos = s->buffer + (ptrdiff_t) s->write ;
+    }
+    s->writer_flags &= ~XSHMP_WAITING; //Stop waiting
+
+
+    user_buf = (const uint8_t*) buf;
+
+    current_buf = user_buf;
+    usr_max_buf = user_buf + (ptrdiff_t) nbytes;
+
+    gran_max_buf = user_buf + (ptrdiff_t) XEN_SHM_PIPE_UPDATE_SIZE;
+    circ_max_buf = user_buf;
+    min_max_buf = user_buf;
+
+    shared_max = s->buffer + (ptrdiff_t) p->buffer_size;
+
+    while(write_pos != read_pos_reduced && current_buf != usr_max_buf) //We write as much as we can
+    {
+
+        /*
+         * Get the minimum of different boundaries
+         */
+        min_max_buf = circ_max_buf;
+        if(min_max_buf > usr_max_buf) {
+            min_max_buf = usr_max_buf;
+        }
+        if(min_max_buf > gran_max_buf) {
+            min_max_buf = gran_max_buf;
+        }
+
+        /*
+         * Actually write
+         */
+        while(current_buf != min_max_buf) {
+            *write_pos = *current_buf;
+            ++current_buf;
+            ++write_pos;
+        }
+
+        /*
+         * Check boundary values
+         */
+        if(current_buf == gran_max_buf) { //Time to take news of the other guy
+            if(s->reader_flags & XSHMP_WAITING) { //Reader is waiting
+                ioctl(p->fd, XEN_SHM_IOCTL_SSIG, 0);
+            }
+            gran_max_buf += (ptrdiff_t) XEN_SHM_PIPE_UPDATE_SIZE;
+        }
+
+        if(write_pos == shared_max) {
+            write_pos = s->buffer;
+        }
+
+        read_pos_reduced = s->buffer + (ptrdiff_t) s->read;
+        read_pos_reduced = (read_pos_reduced == s->buffer)?(shared_max-1):(read_pos_reduced-1);
+        s->write = (uint32_t) (write_pos - s->buffer); //Update read position in shared memory
+
+        if(write_pos <= read_pos_reduced) {
+            circ_max_buf = current_buf + (ptrdiff_t)(read_pos_reduced - write_pos); //Write up to read reduced
+        } else {
+            circ_max_buf = current_buf +  (ptrdiff_t)(shared_max - write_pos); //Read up to the end of the circular buffer
+        }
+
+    }
+
+    if(s->reader_flags & XSHMP_WAITING) { //Writer is waiting
+        ioctl(p->fd, XEN_SHM_IOCTL_SSIG, 0);
+    }
+
+
+    return (ssize_t) (current_buf - user_buf);
+
+
+
+}
 
