@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include "../xen_shm_pipe.h"
 
@@ -12,7 +13,28 @@
  */
 
 #define PAGE_COUNT 1
-#define BUFFER_SIZE 128
+#define BUFFER_SIZE 512
+
+
+static uint32_t checksum;
+static uint32_t rcv_bytes;
+static xen_shm_pipe_p pipe;
+
+static void
+clean(int sig)
+{
+    printf("\n");
+    if(sig >= 0) {
+        printf("Signal received: %i\n", sig);
+    }
+    printf("Now closing the pipe\n", sig);
+    xen_shm_pipe_free(pipe);
+
+    printf("%"PRIu32" bytes received \n", rcv_bytes);
+    printf("check sum: %"PRIu32"  \n", checksum);
+
+    exit(0);
+}
 
 
 int main(int argc, char **argv) {
@@ -23,7 +45,8 @@ int main(int argc, char **argv) {
     ssize_t retval;
     uint8_t buffer[BUFFER_SIZE];
 
-    xen_shm_pipe_p pipe;
+    uint32_t to_read;
+    int i;
 
     printf("Pipe reader now starting\n");
 
@@ -58,23 +81,43 @@ int main(int argc, char **argv) {
     }
 
     printf("Connected successfully !\n");
-    sleep(5);
+    signal(SIGINT, clean);
 
-    printf("I will now read what is incoming\n");
-    while((retval = xen_shm_pipe_read(pipe,buffer,BUFFER_SIZE-1))>0) {
-        buffer[retval] = '\0';
-        printf("%s", buffer);
+
+
+    while(1) {
+        printf("\nHow many bytes shall I read ? ");
+        if((scanf("%"SCNu32, &to_read)!=1)) {
+            printf("Scanf error");
+            return -1;
+        }
+
+        while(to_read) {
+            retval = xen_shm_pipe_read(pipe,buffer,(BUFFER_SIZE>to_read)?to_read:BUFFER_SIZE);
+
+            if(retval == 0) {
+                printf("End of file\n");
+                clean(0);
+                return 0;
+            } else if(retval < 0){
+                perror("xen pipe read");
+                clean(0);
+                return 0;
+            }
+
+            to_read -= retval;
+            rcv_bytes += retval;
+            for(i=0; i<retval; ++i) {
+                checksum = checksum + ((uint32_t) buffer[ ((int) offset) + i] + 10)*((uint32_t) buffer[ ((int) offset) + i] + 20);
+            }
+            printf("\r%"PRIu32, rcv_bytes);
+        }
+
+
     }
 
-    if(retval == 0) {
-        printf("End of file\n");
-    } else {
-        perror("xen pipe read");
-        return -1;
-    }
 
-    printf("I will now close the pipe\n");
-    xen_shm_pipe_free(pipe);
+    clean(0);
 
     return 0;
 }
