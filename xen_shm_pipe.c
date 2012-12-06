@@ -82,7 +82,7 @@ __xen_shm_pipe_map_shared_memory(struct xen_shm_pipe_priv* p, uint8_t page_count
 
     shared = mmap(0, (size_t) page_count*XEN_SHM_PIPE_PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, p->fd, 0);
     if (shared == MAP_FAILED) {
-        return errno;
+        return -1;
     }
 
     p->shared = shared;
@@ -94,13 +94,16 @@ xen_shm_pipe_init(xen_shm_pipe_p * xpipe,enum xen_shm_pipe_mod mod,enum xen_shm_
 {
     struct xen_shm_pipe_priv* p = malloc(sizeof(struct xen_shm_pipe_priv));
 
-    if(p==NULL)
-        return ENOMEM;
+    if(p==NULL) {
+        errno = ENOMEM;
+        return -1;
+    }
 
     p->fd = open(XEN_SHM_DEVICE_PATH , O_RDWR);
     if (p->fd < 0) {
        free(p);
-       return ENODEV;
+       errno = ENODEV;
+       return -1;
     }
 
     p->conv = conv;
@@ -115,16 +118,16 @@ xen_shm_pipe_init(xen_shm_pipe_p * xpipe,enum xen_shm_pipe_mod mod,enum xen_shm_
 int xen_shm_pipe_getdomid(xen_shm_pipe_p xpipe, uint32_t* receiver_domid) {
     struct xen_shm_pipe_priv* p;
     struct xen_shm_ioctlarg_getdomid getdomid;
-    int retval;
 
     p = xpipe;
     if(__xen_shm_pipe_is_offerer(p)) {
-        return EINVAL;
+        errno = EMEDIUMTYPE;
+        return -1;
     }
 
-    retval = ioctl(p->fd, XEN_SHM_IOCTL_GET_DOMID, &getdomid);
-    if (retval != 0) {
-        return retval;
+
+    if (ioctl(p->fd, XEN_SHM_IOCTL_GET_DOMID, &getdomid)) {
+        return -1;
     }
 
     *receiver_domid = getdomid.local_domid;
@@ -138,25 +141,24 @@ xen_shm_pipe_offers(xen_shm_pipe_p xpipe, uint8_t page_count,
 {
     struct xen_shm_pipe_priv* p;
     struct xen_shm_ioctlarg_offerer init_offerer;
-    int retval;
+
 
     p = xpipe;
     if(!__xen_shm_pipe_is_offerer(p)) {
-        return EINVAL;
+        errno = EMEDIUMTYPE;
+        return -1;
     }
 
     init_offerer.pages_count = page_count;
     init_offerer.dist_domid = (domid_t) receiver_domid;
 
-    retval = ioctl(p->fd, XEN_SHM_IOCTL_INIT_OFFERER, &init_offerer);
-    if (retval != 0) {
-        return retval;
+    if (ioctl(p->fd, XEN_SHM_IOCTL_INIT_OFFERER, &init_offerer)) {
+        return -1;
     }
 
 
-    retval = __xen_shm_pipe_map_shared_memory(p, page_count);
-    if(retval != 0) {
-        return retval;
+    if(__xen_shm_pipe_map_shared_memory(p, page_count)) {
+        return -1;
     }
 
     *offerer_domid = (uint32_t) init_offerer.local_domid;
@@ -182,25 +184,24 @@ xen_shm_pipe_connect(xen_shm_pipe_p xpipe, uint8_t page_count, uint32_t offerer_
 {
     struct xen_shm_pipe_priv* p;
     struct xen_shm_ioctlarg_receiver init_receiver;
-    int retval;
 
     p = xpipe;
     if(__xen_shm_pipe_is_offerer(p)) {
-        return EINVAL;
+        errno = EMEDIUMTYPE;
+        return -1;
     }
 
     init_receiver.pages_count = page_count;
     init_receiver.dist_domid = (domid_t) offerer_domid;
     init_receiver.grant = grant_ref;
 
-    retval = ioctl(p->fd, XEN_SHM_IOCTL_INIT_RECEIVER, &init_receiver);
-    if (retval != 0) {
-        return retval;
+    if (ioctl(p->fd, XEN_SHM_IOCTL_INIT_RECEIVER, &init_receiver)) {
+        return -1;
     }
 
-    retval = __xen_shm_pipe_map_shared_memory(p, page_count);
-    if(retval != 0) {
-        return retval;
+
+    if(__xen_shm_pipe_map_shared_memory(p, page_count)) {
+        return -1;
     }
 
     p->buffer_size = (size_t) page_count*XEN_SHM_PIPE_PAGE_SIZE - sizeof(struct xen_shm_pipe_shared);
@@ -215,20 +216,26 @@ xen_shm_pipe_connect(xen_shm_pipe_p xpipe, uint8_t page_count, uint32_t offerer_
 int xen_shm_pipe_wait(xen_shm_pipe_p xpipe, unsigned long timeout_ms) {
     struct xen_shm_pipe_priv* p;
     struct xen_shm_ioctlarg_await wait;
-    int retval;
 
     p = xpipe;
     if(!__xen_shm_pipe_is_offerer(p) || p->shared == NULL) {
-        return EINVAL;
+        errno = EMEDIUMTYPE;
+        return -1;
     }
 
     wait.request_flags = XEN_SHM_IOCTL_AWAIT_INIT;
     wait.timeout_ms = timeout_ms;
 
-    if((retval = ioctl(p->fd, XEN_SHM_IOCTL_AWAIT, &wait))) {
-        return retval;
+    if(ioctl(p->fd, XEN_SHM_IOCTL_AWAIT, &wait)) {
+        return -1;
     }
-    return (wait.remaining_ms==0)?ETIME:0;
+
+    if(wait.remaining_ms==0) {
+        errno = ETIME;
+        return -1;
+    }
+
+    return 0;
 
 }
 
@@ -272,15 +279,20 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
     uint8_t* min_max_buf;//Min value of the 3 different out of bound
 
     p = xpipe;
-    if(p->mod == xen_shm_pipe_mod_write) //Not reader
+    if(p->mod == xen_shm_pipe_mod_write) { //Not reader
+        errno = EMEDIUMTYPE;
         return -1;
+    }
 
-    if(p->shared == NULL) //Not initialized
+    if(p->shared == NULL) { //Not initialized
+        errno = EMEDIUMTYPE;
         return -1;
+    }
 
     s = p->shared;
-    if(s->reader_flags & XSHMP_CLOSED) //Closed
+    if(s->reader_flags & XSHMP_CLOSED) {//Closed
         return 0;
+    }
 
     read_pos = s->buffer + (ptrdiff_t) s->read ;
     write_pos = s->buffer + (ptrdiff_t) s->write ;
