@@ -17,7 +17,7 @@
 #define BUFFER_SIZE 512
 
 static uint32_t checksum;
-static uint32_t sent_bytes;
+static uint64_t sent_bytes;
 static xen_shm_pipe_p xpipe;
 
 static void
@@ -30,7 +30,7 @@ clean(int sig)
     printf("Now closing the pipe\n");
     xen_shm_pipe_free(xpipe);
 
-    printf("%"PRIu32" bytes sent \n", sent_bytes);
+    printf("%"PRIu64" bytes sent \n", sent_bytes);
     printf("check sum: %"PRIu32"  \n", checksum);
 
     exit(0);
@@ -60,11 +60,19 @@ int main(int argc, char **argv) {
         return -1;
     }
 
+    if(sscanf(argv[1], "%"SCNu16, &target) != 1) {
+                printf("Bad argument, need to be a domid_t\n");
+            }
 
-    printf("Distant domain id: ");
-    if((scanf("%"SCNu32, &dist_domid)!=1)) {
-        printf("Scanf error");
-        return -1;
+    if(argc>1 && sscanf(argv[1], "%"SCNu32, &dist_domid)) {
+        rintf("Using distant domain id: %"PRIu32"\n", dist_domid);
+    } else {
+
+        printf("Distant domain id: ");
+        if((scanf("%"SCNu32, &dist_domid)!=1)) {
+            printf("Scanf error");
+            return -1;
+        }
     }
 
 
@@ -101,13 +109,13 @@ int main(int argc, char **argv) {
                 clean(0);
                 return 0;
             }
-            sent_bytes+=(uint32_t) retval;
+            sent_bytes+=(uint64_t) retval;
             for(i=0; i<retval; ++i) {
                 checksum = checksum + ((uint32_t) buffer[ ((int) offset) + i] + 10)*((uint32_t) buffer[ ((int) offset) + i] + 20);
                 //printf("Checksum with '%"PRIu8"' -- %"PRIu32"\n", buffer[ ((int) offset) + i], checksum);
             }
             offset+= (size_t) retval;
-            printf("\r%"PRIu32, sent_bytes);
+            printf("\r%"PRIu64, sent_bytes);
             fflush(stdout);
         }
 

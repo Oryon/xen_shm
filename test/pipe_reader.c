@@ -17,7 +17,7 @@
 
 
 static uint32_t checksum;
-static uint32_t rcv_bytes;
+static uint64_t rcv_bytes;
 static xen_shm_pipe_p xpipe;
 
 static void
@@ -30,7 +30,7 @@ clean(int sig)
     printf("Now closing the pipe\n");
     xen_shm_pipe_free(xpipe);
 
-    printf("%"PRIu32" bytes received \n", rcv_bytes);
+    printf("%"PRIu64" bytes received \n", rcv_bytes);
     printf("check sum: %"PRIu32"  \n", checksum);
 
     exit(0);
@@ -107,12 +107,12 @@ int main(int argc, char **argv) {
             }
 
             to_read -= (uint32_t) retval;
-            rcv_bytes += (uint32_t) retval;
+            rcv_bytes += (uint64_t) retval;
             for(i=0; i<retval; ++i) {
                 checksum = checksum + ((uint32_t) buffer[i] + 10)*((uint32_t) buffer[i] + 20);
                 //printf("Checksum with '%"PRIu8"' -- %"PRIu32"\n", buffer[i], checksum);
             }
-            printf("\r%"PRIu32, rcv_bytes);
+            printf("\r%"PRIu64, rcv_bytes);
             //buffer[retval]='\0';
             //printf("%s", buffer);
             fflush(stdout);
