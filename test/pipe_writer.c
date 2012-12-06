@@ -101,11 +101,12 @@ int main(int argc, char **argv) {
                 clean(0);
                 return 0;
             }
-            offset+= (size_t) retval;
             sent_bytes+=(uint32_t) retval;
             for(i=0; i<retval; ++i) {
                 checksum = checksum + ((uint32_t) buffer[ ((int) offset) + i] + 10)*((uint32_t) buffer[ ((int) offset) + i] + 20);
+                //printf("Checksum with '%"PRIu8"' -- %"PRIu32"\n", buffer[ ((int) offset) + i], checksum);
             }
+            offset+= (size_t) retval;
             printf("\r%"PRIu32, sent_bytes);
             fflush(stdout);
         }

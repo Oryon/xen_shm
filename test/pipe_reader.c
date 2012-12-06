@@ -84,7 +84,8 @@ int main(int argc, char **argv) {
     signal(SIGINT, clean);
 
 
-
+    rcv_bytes = 0;
+    checksum = 0;
     while(1) {
         printf("\nHow many bytes shall I read ? ");
         if((scanf("%"SCNu32, &to_read)!=1)) {
@@ -109,10 +110,11 @@ int main(int argc, char **argv) {
             rcv_bytes += (uint32_t) retval;
             for(i=0; i<retval; ++i) {
                 checksum = checksum + ((uint32_t) buffer[i] + 10)*((uint32_t) buffer[i] + 20);
+                //printf("Checksum with '%"PRIu8"' -- %"PRIu32"\n", buffer[i], checksum);
             }
-            //printf("\r%"PRIu32, rcv_bytes);
-            buffer[retval]='\0';
-            printf("%s", buffer);
+            printf("\r%"PRIu32, rcv_bytes);
+            //buffer[retval]='\0';
+            //printf("%s", buffer);
             fflush(stdout);
         }
 
