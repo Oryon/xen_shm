@@ -14,7 +14,6 @@
 #define PAGE_COUNT 1
 
 int main(int argc, char **argv) {
-    int retval;
     uint32_t local_domid;
     uint32_t dist_domid;
     uint32_t grant_ref;
@@ -23,13 +22,13 @@ int main(int argc, char **argv) {
 
     printf("Pipe reader now starting\n");
 
-    if((retval = xen_shm_pipe_init(&pipe, xen_shm_pipe_mod_read, xen_shm_pipe_conv_writer_offers))) {
-        printf("Pipe init error %"PRIu32"\n", retval);
+    if(xen_shm_pipe_init(&pipe, xen_shm_pipe_mod_read, xen_shm_pipe_conv_writer_offers)) {
+        perror("Pipe init");
         return -1;
     }
 
-    if((retval = xen_shm_pipe_getdomid(pipe, &local_domid))) {
-        printf("Pipe get domid error %"PRIu32"\n", retval);
+    if(xen_shm_pipe_getdomid(pipe, &local_domid)) {
+        perror("Pipe get domid");
         return -1;
     }
 
@@ -48,8 +47,8 @@ int main(int argc, char **argv) {
 
 
 
-    if((retval = xen_shm_pipe_connect(pipe,PAGE_COUNT,dist_domid, grant_ref))) {
-        printf("Pipe connect error %"PRIu32"\n", retval);
+    if(xen_shm_pipe_connect(pipe,PAGE_COUNT,dist_domid, grant_ref)) {
+        perror("Pipe connect");
         return -1;
     }
 

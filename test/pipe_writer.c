@@ -14,7 +14,6 @@
 #define PAGE_COUNT 1
 
 int main(int argc, char **argv) {
-    int retval;
     uint32_t local_domid;
     uint32_t dist_domid;
     uint32_t grant_ref;
@@ -23,8 +22,8 @@ int main(int argc, char **argv) {
 
     printf("Pipe writer now starting\n");
 
-    if((retval = xen_shm_pipe_init(&pipe, xen_shm_pipe_mod_write, xen_shm_pipe_conv_writer_offers))) {
-        printf("Pipe init error %"PRIu32"\n", retval);
+    if(xen_shm_pipe_init(&pipe, xen_shm_pipe_mod_write, xen_shm_pipe_conv_writer_offers)) {
+        perror("Pipe init");
         return -1;
     }
 
@@ -36,8 +35,8 @@ int main(int argc, char **argv) {
     }
 
 
-    if((retval = xen_shm_pipe_offers(pipe, PAGE_COUNT, dist_domid, &local_domid, &grant_ref))) {
-        printf("Pipe get domid error %"PRIu32"\n", retval);
+    if(xen_shm_pipe_offers(pipe, PAGE_COUNT, dist_domid, &local_domid, &grant_ref)) {
+        perror("Pipe get domid");
         return -1;
     }
 
@@ -45,8 +44,8 @@ int main(int argc, char **argv) {
     printf("Grant reference id: %"PRIu32"\n", grant_ref);
 
     printf("Will now wait for at most 30 seconds\n");
-    if((retval = xen_shm_pipe_wait(pipe, 30*1000))) {
-        printf("Pipe wait error %"PRIu32"\n", retval);
+    if(xen_shm_pipe_wait(pipe, 30*1000)) {
+        perror("Pipe wait");
         return -1;
     }
 
