@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
         }
 
         while(to_read) {
-            retval = xen_shm_pipe_read(xpipe,buffer,(BUFFER_SIZE>to_read)?to_read:BUFFER_SIZE);
+            retval = xen_shm_pipe_read(xpipe,buffer,(BUFFER_SIZE-1>to_read)?to_read:(BUFFER_SIZE-1));
 
             if(retval == 0) {
                 printf("End of file\n");
@@ -110,7 +110,10 @@ int main(int argc, char **argv) {
             for(i=0; i<retval; ++i) {
                 checksum = checksum + ((uint32_t) buffer[i] + 10)*((uint32_t) buffer[i] + 20);
             }
-            printf("\r%"PRIu32, rcv_bytes);
+            //printf("\r%"PRIu32, rcv_bytes);
+            buffer[retval]='\0';
+            printf("%s", buffer);
+            fflush(stdout);
         }
 
 
