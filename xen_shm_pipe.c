@@ -393,7 +393,7 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
 
 
 
-ssize_t xen_shm_pipe_write(xen_shm_pipe_p pipe, const void* buf, size_t nbytes) {
+ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes) {
     struct xen_shm_pipe_priv* p;
     struct xen_shm_pipe_shared* s;
     struct xen_shm_ioctlarg_await await_op;
