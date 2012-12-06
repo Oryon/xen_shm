@@ -13,8 +13,8 @@
  * This is the OFFERER
  */
 
-#define PAGE_COUNT 1
-#define BUFFER_SIZE 512
+#define PAGE_COUNT 10
+#define BUFFER_SIZE 5000
 
 static uint32_t checksum;
 static uint64_t sent_bytes;
