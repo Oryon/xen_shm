@@ -358,12 +358,12 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
         if(current_buf == circ_max_buf) { //Time to check if the read pointer must be rewind
             if(read_pos == shared_max) {
                 read_pos = s->buffer;
-                circ_max_buf = user_buf + write_pos - read_pos; //We know write is to the right
+                circ_max_buf = user_buf + (ptrdiff_t)(write_pos - read_pos); //We know write is to the right
             } else {
                 if(read_pos < write_pos) {
-                    circ_max_buf = user_buf + write_pos - read_pos; //Read up to write
+                    circ_max_buf = user_buf + (ptrdiff_t)(write_pos - read_pos); //Read up to write
                 } else {
-                    circ_max_buf = user_buf + shared_max - read_pos; //Read up to the end of the circular buffer
+                    circ_max_buf = user_buf + (ptrdiff_t)(shared_max - read_pos); //Read up to the end of the circular buffer
                 }
             }
         }
