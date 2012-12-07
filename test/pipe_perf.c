@@ -9,7 +9,7 @@
 #include "../xen_shm_pipe.h"
 
 
-static uint32_t page_count;
+static uint8_t page_count;
 static uint32_t buffer_size;
 static uint32_t iterations;
 static uint64_t byte_count;
@@ -33,7 +33,7 @@ clean(int sig)
 }
 
 void
-usage()
+usage(void)
 {
     printf("Usage: reader <page_count> <buffer_size>\n");
     printf("  OR   writer <page_count> <message_size> <iterations>\n");
@@ -42,9 +42,7 @@ usage()
 
 
 
-void
-
-void pipe_read() {
+void pipe_read(void) {
     uint8_t* buffer;
     ssize_t retval;
 
@@ -67,7 +65,7 @@ void pipe_read() {
 
 }
 
-void pipe_write() {
+void pipe_write(void) {
     uint8_t* buffer;
     ssize_t retval;
     uint32_t i;
@@ -100,7 +98,7 @@ void pipe_write() {
 }
 
 
-void init_pipe_reader() {
+void init_pipe_reader(void) {
     uint32_t local_domid;
     uint32_t dist_domid;
     uint32_t grant_ref;
@@ -142,7 +140,7 @@ void init_pipe_reader() {
 }
 
 
-void init_pipe_writer() {
+void init_pipe_writer(void) {
     uint32_t local_domid;
     uint32_t dist_domid;
     uint32_t grant_ref;
@@ -187,8 +185,8 @@ void init_pipe_writer() {
 void read_pc_and_size(int argc, char **argv) {
     byte_count = 0;
 
-    if(sscanf(argv[2], "%"SCNu32, &page_count) ) {
-        printf("Page count: %"PRIu32"\n", page_count);
+    if(sscanf(argv[2], "%"SCNu8, &page_count) ) {
+        printf("Page count: %"PRIu8"\n", page_count);
     } else {
         printf("Invalid page count\n");
         usage();
@@ -203,7 +201,6 @@ void read_pc_and_size(int argc, char **argv) {
 }
 
 void pipe_reader(int argc, char **argv) {
-    uint32_t buffer_size;
 
     if(argc < 4) {
         usage();
