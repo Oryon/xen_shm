@@ -324,7 +324,7 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
     }
 
     //Prepare wait structure
-    await_op.request_flags = XEN_SHM_IOCTL_AWAIT_USER;
+    await_op.request_flags = XEN_SHM_IOCTL_AWAIT_USER | XEN_SHM_IOCTL_AWAIT_MUTEX;
     await_op.timeout_ms = 0;
 
     shared_max = s->buffer + (ptrdiff_t) p->buffer_size;
@@ -377,7 +377,14 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
                     return (other_flags & XSHMP_CLOSED)?0:-1;
                 } //Ignore error and read
                 break;
-            }//True error (like interrupt)
+            } else if (errno == EDEADLK) { //Other process is waiting
+#ifdef XSHMP_STATS
+                p->stats.ioctl_count_ssig++;
+#endif
+                ioctl(p->fd, XEN_SHM_IOCTL_SSIG, 0);
+                break;
+            }
+            //True error (like interrupt)
             s->reader_flags &= ~XSHMP_WAITING; //Stop waiting
             return -1;
         }
@@ -542,7 +549,7 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
     }
 
     //Prepare wait structure
-    await_op.request_flags = XEN_SHM_IOCTL_AWAIT_USER;
+    await_op.request_flags = XEN_SHM_IOCTL_AWAIT_USER | XEN_SHM_IOCTL_AWAIT_MUTEX;
     await_op.timeout_ms = 0;
 
     shared_max = s->buffer + (ptrdiff_t) p->buffer_size;
@@ -576,6 +583,15 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
             p->stats.waiting = 1;
 #endif
             if(ioctl(p->fd, XEN_SHM_IOCTL_AWAIT, &await_op)) {
+
+                if (errno == EDEADLK) { //Other process is waiting
+#ifdef XSHMP_STATS
+                    p->stats.ioctl_count_ssig++;
+#endif
+                    ioctl(p->fd, XEN_SHM_IOCTL_SSIG, 0);
+                    break;
+                }
+
                 s->writer_flags &= ~XSHMP_WAITING; //Stop waiting
                 return -1; //Another error
             }
