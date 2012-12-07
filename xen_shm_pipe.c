@@ -365,15 +365,15 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
          * Actually read
          */
         //Tests 64b alignement
-        if((current_buf & ((uint8_t*) 0x3u)) == (read_pos & ((uint8_t*) 0x3u)) && min_max_buf - current_buf > 12) {
+        if(0 && ( ((unsigned long) current_buf) & ((unsigned long) 0x3u)) == ( ((unsigned long)read_pos) & ((unsigned long) 0x3u)) && min_max_buf - current_buf > 12) {
             //Align optimized
-            while(current_buf & ((uint8_t*) 0x3u)) { //Slow copy to align with 64b pointers
+            while( ((unsigned long) current_buf) & ((unsigned long) 0x3u)) { //Slow copy to align with 64b pointers
                 *current_buf = *read_pos;
                 ++current_buf;
                 ++read_pos;
             }
 
-            min_max_buf64 = ((uint64_t*)(min_max_buf & ~((uint8_t*) 0x3u) )) - 1; //Previous aligned
+            min_max_buf64 = ((uint64_t*)( ((unsigned long)min_max_buf) & ~((unsigned long) 0x3u) )) - 1; //Previous aligned
             current_buf64 = (uint64_t*)(current_buf);
             read_pos64 = (uint64_t*)(read_pos);
             while(current_buf64 != min_max_buf64) { //Fast copy
@@ -538,15 +538,15 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
          */
 
         //Tests 64b alignement
-        if((current_buf & ((uint8_t*) 0x3u)) == (write_pos & ((uint8_t*) 0x3u)) && min_max_buf - current_buf > 12) {
+        if(( 0 &&  (unsigned long) current_buf & ((unsigned long) 0x3u))  == ((unsigned long) write_pos & ((unsigned long) 0x3u)) && min_max_buf - current_buf > 12) {
             //Align optimized
-            while(current_buf & ((uint8_t*) 0x3u)) { //Slow copy to align with 64b pointers
+            while( ((unsigned long) current_buf) & ((unsigned long) 0x3u)) { //Slow copy to align with 64b pointers
                 *write_pos = *current_buf;
                 ++current_buf;
                 ++write_pos;
             }
 
-            min_max_buf64 = ((uint64_t*)(min_max_buf & ~((uint8_t*) 0x3u))) - 1; //Previous aligned
+            min_max_buf64 = ((uint64_t*)( ((unsigned long) min_max_buf) & ~((unsigned long) 0x3u))) - 1; //Previous aligned
             current_buf64 = (const uint64_t*)(current_buf);
             write_pos64 = (uint64_t*)(write_pos);
             while(current_buf64 != min_max_buf64) { //Fast copy
