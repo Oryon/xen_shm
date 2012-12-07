@@ -43,7 +43,7 @@ int main(int argc, char **argv) {
     uint32_t grant_ref;
 
 
-    //int i;
+    int i;
     uint8_t buffer[BUFFER_SIZE];
     size_t offset;
     size_t msg_len;
@@ -108,13 +108,13 @@ int main(int argc, char **argv) {
                 return 0;
             }
             sent_bytes+=(uint64_t) retval;
-            //for(i=0; i<retval; ++i) {
-            //    checksum = checksum + ((uint32_t) buffer[ ((int) offset) + i] + 10)*((uint32_t) buffer[ ((int) offset) + i] + 20);
+            for(i=0; i<retval; ++i) {
+                checksum = checksum + ((uint32_t) buffer[ ((int) offset) + i] + 10)*((uint32_t) buffer[ ((int) offset) + i] + 20);
                 //printf("Checksum with '%"PRIu8"' -- %"PRIu32"\n", buffer[ ((int) offset) + i], checksum);
-            //}
+            }
             offset+= (size_t) retval;
-            //printf("\r%"PRIu64, sent_bytes);
-            //fflush(stdout);
+            printf("\r%"PRIu64, sent_bytes);
+            fflush(stdout);
         }
 
 
