@@ -383,6 +383,7 @@ __xen_shm_unmap_receiver_grant_pages(struct xen_shm_instance_data *data, int off
             if (err != 0) {
                 printk(KERN_WARNING "xen_shm: error while unmapping refs: %i\n", err);
             }
+            data->unmap_ops[offset].handle = -1;
             --nb;
         }
         ++offset;
@@ -1266,6 +1267,7 @@ clean:
             if (err != 0) {
                 printk(KERN_WARNING "xen_shm: error while unmapping refs: %i\n", err);
             }
+            data->unmap_ops[offset].handle = -1;
         }
     }
 clean_pages:
