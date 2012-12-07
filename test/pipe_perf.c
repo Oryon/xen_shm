@@ -8,6 +8,7 @@
 
 #include "../xen_shm_pipe.h"
 
+#define SHOW_STATS
 
 static uint8_t page_count;
 static uint32_t buffer_size;
@@ -70,6 +71,10 @@ void pipe_read(void) {
     uint8_t* buffer;
     ssize_t retval;
 
+#if defined(XSHMP_STATS) && defined(SHOW_STATS)
+    struct xen_shm_pipe_stats stats;
+#endif
+
     if((buffer = malloc(sizeof(uint8_t)*buffer_size))== NULL) {
         printf("Memory error\n");
         clean(0);
@@ -77,6 +82,14 @@ void pipe_read(void) {
 
     while((retval = xen_shm_pipe_read_all(xpipe, buffer, buffer_size)) > 0) {
         byte_count += (uint64_t) retval;
+
+#if defined(XSHMP_STATS) && defined(SHOW_STATS)
+        stats = xen_shm_pipe_get_stats(xpipe);
+        printf("\rWait: %"PRIu64" Signals: %"PRIu64" Write: %"PRIu64" Read: %"PRIu64" Waiting: %"PRIu8" ",
+                stats.ioctl_count_await, stats.ioctl_count_ssig, stats.write_count, stats.read_count, stats.waiting);
+
+#endif
+
     }
 
     if(retval == 0) {
@@ -93,6 +106,9 @@ void pipe_write(void) {
     uint8_t* buffer;
     ssize_t retval;
     uint32_t i;
+#if defined(XSHMP_STATS) && defined(SHOW_STATS)
+    struct xen_shm_pipe_stats stats;
+#endif
 
     if((buffer = malloc(sizeof(uint8_t)*buffer_size))== NULL) {
         printf("Memory error\n");
@@ -114,8 +130,14 @@ void pipe_write(void) {
         }
         byte_count+=(uint64_t) retval;
 
-    }
+#if defined(XSHMP_STATS) && defined(SHOW_STATS)
+    stats = xen_shm_pipe_get_stats(xpipe);
+    printf("\rWait: %"PRIu64" Signals: %"PRIu64" Write: %"PRIu64" Read: %"PRIu64" Waiting: %"PRIu8" ",
+            stats.ioctl_count_await, stats.ioctl_count_ssig, stats.write_count, stats.read_count, stats.waiting);
 
+#endif
+
+    }
 
     clean(0);
 
