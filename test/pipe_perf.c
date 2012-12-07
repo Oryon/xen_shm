@@ -29,12 +29,25 @@ void pipe_writer(int argc, char **argv);
 static void
 clean(int sig)
 {
+#ifdef XSHMP_STATS
+    struct xen_shm_pipe_stats stats;
+#endif
+
     printf("\n");
     if(sig >= 0) {
         printf("Signal received: %i\n", sig);
     }
 
     printf("Byte count: %"PRIu64"\n", byte_count);
+
+#ifdef XSHMP_STATS
+    stats = xen_shm_pipe_get_stats(xpipe);
+    printf("Wait calls   : %"PRIu64"\n", stats.ioctl_count_await);
+    printf("Signal calls : %"PRIu64"\n", stats.ioctl_count_ssig);
+    printf("Write calls  : %"PRIu64"\n", stats.write_count);
+    printf("Read calls   : %"PRIu64"\n", stats.read_count);
+#endif
+
 
     printf("Now closing the pipe\n");
     xen_shm_pipe_free(xpipe);

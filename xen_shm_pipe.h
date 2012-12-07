@@ -19,6 +19,19 @@
 
 #include <inttypes.h>
 
+#define XSHMP_STATS
+
+#ifdef XSHMP_STATS
+struct xen_shm_pipe_stats {
+    uint64_t ioctl_count_await;
+    uint64_t ioctl_count_ssig;
+    uint64_t read_count;
+    uint64_t write_count;
+};
+#endif
+
+
+
 /*
  * Everything is private within this structure. Therefore, the user cannot manipulate it.
  */
@@ -110,6 +123,14 @@ ssize_t xen_shm_pipe_read_all(xen_shm_pipe_p pipe, void* buf, size_t nbytes);
  * All pipes must be freed when they are not used anymore.
  */
 void xen_shm_pipe_free(xen_shm_pipe_p);
+
+
+#ifdef XSHMP_STATS
+/*
+ * Get the statistics about the pipe
+ */
+struct xen_shm_pipe_stats xen_shm_pipe_get_stats(xen_shm_pipe_p pipe);
+#endif
 
 #endif
 
