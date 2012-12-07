@@ -543,7 +543,7 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
 ssize_t xen_shm_pipe_write_all(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes) {
     size_t written;
     ssize_t retval;
-    uint8_t* buffer;
+    const uint8_t* buffer;
 
     written = 0;
     buffer = (const uint8_t*) buf;
@@ -564,7 +564,7 @@ ssize_t xen_shm_pipe_write_all(xen_shm_pipe_p xpipe, const void* buf, size_t nby
 ssize_t xen_shm_pipe_read_all(xen_shm_pipe_p xpipe, void* buf, size_t nbytes) {
     size_t read;
     ssize_t retval;
-    const uint8_t* buffer;
+    uint8_t* buffer;
 
     read = 0;
     buffer = (uint8_t*) buf;
