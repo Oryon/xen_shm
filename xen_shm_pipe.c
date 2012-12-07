@@ -270,16 +270,19 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
     uint8_t* user_buf; //A cast of the given user buffer
 
     uint8_t* read_pos; //Read pointer in circular buffer
+    uint64_t* read_pos64;//64b aligned
     uint8_t* write_pos;//Write pointer in circ buff
     uint8_t* shared_max; //Out of bound pointer in circ buffer
 
     uint8_t* current_buf;//Current write pos
+    uint64_t* current_buf64;//64b aligned
 
     uint8_t* usr_max_buf;//Out of bound given by the user
     uint8_t* gran_max_buf;//Out of bound to check if the writer is waiting
     uint8_t* circ_max_buf;//Out of bound given by the circ buffer
 
     uint8_t* min_max_buf;//Min value of the 3 different out of bound
+    uint64_t* min_max_buf64;//64b aligned
 
     p = xpipe;
     if(p->mod == xen_shm_pipe_mod_write) { //Not reader
@@ -361,11 +364,45 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
         /*
          * Actually read
          */
-        while(current_buf != min_max_buf) {
-            *current_buf = *read_pos;
-            ++current_buf;
-            ++read_pos;
+        //Tests 64b alignement
+        if((current_buf & 0x3u) == (read_pos & 0x3u) && min_max_buf - current_buf > 12) {
+            //Align optimized
+            while(current_buf & 0x3u) { //Slow copy to align with 64b pointers
+                *current_buf = *read_pos;
+                ++current_buf;
+                ++read_pos;
+            }
+
+            min_max_buf64 = ((uint64_t*)(min_max_buf & ~0x3u)) - 1; //Previous aligned
+            current_buf64 = (uint64_t*)(current_buf);
+            read_pos64 = (uint64_t*)(read_pos);
+            while(current_buf64 != min_max_buf64) { //Fast copy
+                *current_buf64 = *read_pos64;
+                ++current_buf64;
+                ++read_pos64;
+            }
+            current_buf = (uint8_t*)(current_buf64);
+            write_pos = (uint8_t*)(write_pos64);
+
+            //Ending the copy
+            while(current_buf != min_max_buf) {
+                *current_buf = *read_pos;
+                ++current_buf;
+                ++read_pos;
+            }
+
+        } else {
+            //Slow speed
+            while(current_buf != min_max_buf) {
+                *current_buf = *read_pos;
+                ++current_buf;
+                ++read_pos;
+            }
         }
+
+
+
+
 
         /*
          * Check boundary values
@@ -410,16 +447,19 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
 
     uint8_t* read_pos_reduced; //Read pointer - 1 in circular buffer
     uint8_t* write_pos;//Write pointer in circ buff
+    uint64_t* write_pos64;//64b aligned
     uint8_t* shared_max; //Out of bound pointer in circ buffer
 
     const uint8_t* user_buf; //A cast of the given user buffer
     const uint8_t* current_buf;//Current write pos
+    const uint64_t* current_buf64;//64b aligned
 
     const uint8_t* usr_max_buf;//Out of bound given by the user
     const uint8_t* gran_max_buf;//Out of bound to check if the reader is waiting
     const uint8_t* circ_max_buf;//Out of bound given by the circ buffer
 
     const uint8_t* min_max_buf;//Min value of the 3 different out of bound
+    const uint64_t* min_max_buf64;//64b aligned
 
     p = xpipe;
     if(p->mod == xen_shm_pipe_mod_read) { //Not reader
@@ -496,10 +536,41 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
         /*
          * Actually write
          */
-        while(current_buf != min_max_buf) {
-            *write_pos = *current_buf;
-            ++current_buf;
-            ++write_pos;
+
+        //Tests 64b alignement
+        if((current_buf & 0x3u) == (write_pos & 0x3u) && min_max_buf - current_buf > 12) {
+            //Align optimized
+            while(current_buf & 0x3u) { //Slow copy to align with 64b pointers
+                *write_pos = *current_buf;
+                ++current_buf;
+                ++write_pos;
+            }
+
+            min_max_buf64 = ((uint64_t*)(min_max_buf & ~0x3u)) - 1; //Previous aligned
+            current_buf64 = (uint64_t*)(current_buf);
+            write_pos64 = (uint64_t*)(write_pos);
+            while(current_buf64 != min_max_buf64) { //Fast copy
+                *write_pos64 = *current_buf64;
+                ++current_buf64;
+                ++write_pos64;
+            }
+            current_buf = (uint8_t*)(current_buf64);
+            write_pos = (uint8_t*)(write_pos64);
+
+            //Ending the copy
+            while(current_buf != min_max_buf) {
+                *write_pos = *current_buf;
+                ++current_buf;
+                ++write_pos;
+            }
+
+        } else {
+            //Slow speed
+            while(current_buf != min_max_buf) {
+                *write_pos = *current_buf;
+                ++current_buf;
+                ++write_pos;
+            }
         }
 
         /*
