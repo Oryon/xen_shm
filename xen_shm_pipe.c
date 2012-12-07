@@ -343,7 +343,6 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
         s->reader_flags |= XSHMP_WAITING; //Notify that we are waiting
 
         //Check after flag is set, if not modified, the other MUST know the flag has been changed
-        read_pos = s->buffer + (ptrdiff_t) s->read ;
         write_pos = s->buffer + (ptrdiff_t) s->write ;
         if(read_pos != write_pos) {
             break;
@@ -364,7 +363,6 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
         }
 
         other_flags = s->writer_flags;
-        read_pos = s->buffer + (ptrdiff_t) s->read ;
         write_pos = s->buffer + (ptrdiff_t) s->write ;
 
         if(ioctl_ret) {
@@ -559,7 +557,6 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
         //Check after flag is set, if not modified, the other MUST know the flag has been changed
         read_pos_reduced = s->buffer + (ptrdiff_t) s->read;
         read_pos_reduced = (read_pos_reduced == s->buffer)?(shared_max-1):(read_pos_reduced-1);
-        write_pos = s->buffer + (ptrdiff_t) s->write ;
         if(read_pos_reduced != write_pos) {
             break;
         }
@@ -580,12 +577,11 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
         }
 
 
-
-
         //Update positions
+        other_flags = s->reader_flags;
         read_pos_reduced = s->buffer + (ptrdiff_t) s->read;
         read_pos_reduced = (read_pos_reduced == s->buffer)?(shared_max-1):(read_pos_reduced-1);
-        write_pos = s->buffer + (ptrdiff_t) s->write ;
+
     }
     s->writer_flags &= ~XSHMP_WAITING; //Stop waiting
 
