@@ -66,10 +66,12 @@
  * Deal with old linux/xen
  */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0)
-# define GNTTAB_UNMAP_REFS(unmap_ops, page, count) gnttab_unmap_refs(unmap_ops, page, count)
-#else /* LINUX_VERSION_CODE > KERNEL_VERSION(3, 0, 0) */
-# define GNTTAB_UNMAP_REFS(unmap_ops, page, count) gnttab_unmap_refs(unmap_ops, page, count, true)
-#endif /* LINUX_VERSION_CODE ? KERNEL_VERSION(3, 0, 0) */
+# define GNTTAB_UNMAP_REFS(unmap_ops, kmap_ops, page, count) gnttab_unmap_refs(unmap_ops, page, count)
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(3, 5, 0)
+# define GNTTAB_UNMAP_REFS(unmap_ops, kmap_ops, page, count) gnttab_unmap_refs(unmap_ops, page, count, true)
+#else
+# define GNTTAB_UNMAP_REFS(unmap_ops, kmap_ops, page, count) gnttab_unmap_refs(unmap_ops, kmap_ops, page, count)
+#endif /* LINUX_VERSION_CODE ? */
 
 
 /*
@@ -377,7 +379,7 @@ __xen_shm_unmap_receiver_grant_pages(struct xen_shm_instance_data *data, int off
     while(nb > 0) {
         if (data->unmap_ops[offset].handle != -1) {
             PRINTK(KERN_DEBUG "xen_shm: Unmaping : addr:%p  pte_maddr %llu\n", data->unmap_ops + offset, (phys_addr_t) data->user_pages + offset);
-            err = GNTTAB_UNMAP_REFS(data->unmap_ops + offset, data->user_pages + offset, 1);
+            err = GNTTAB_UNMAP_REFS(data->unmap_ops + offset, data->use_ptemod ? data->kmap_ops + offset : NULL, data->user_pages + offset, 1);
             if (err != 0) {
                 printk(KERN_WARNING "xen_shm: error while unmapping refs: %i\n", err);
             }
@@ -1260,7 +1262,7 @@ clean:
     for (offset = 0; offset < data->pages_count - 1; ++offset) {
         if (data->unmap_ops[offset].handle != -1) {
             PRINTK(KERN_DEBUG "xen_shm: Unmaping: addr:%p  pte_maddr %llu\n", data->unmap_ops + offset, (phys_addr_t) data->user_pages + offset);
-            err = GNTTAB_UNMAP_REFS(data->unmap_ops + offset, data->user_pages + offset, 1);
+            err = GNTTAB_UNMAP_REFS(data->unmap_ops + offset, data->use_ptemod ? data->kmap_ops + offset : NULL, data->user_pages + offset, 1);
             if (err != 0) {
                 printk(KERN_WARNING "xen_shm: error while unmapping refs: %i\n", err);
             }
