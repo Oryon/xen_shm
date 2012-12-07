@@ -403,7 +403,6 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
 
 
 
-
 ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes) {
     struct xen_shm_pipe_priv* p;
     struct xen_shm_pipe_shared* s;
@@ -539,4 +538,47 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
 
 
 }
+
+
+ssize_t xen_shm_pipe_write_all(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes) {
+    size_t written;
+    ssize_t retval;
+    uint8_t* buffer;
+
+    written = 0;
+    buffer = (uint8_t*) buf;
+    while(nbytes) {
+        if((retval = xen_shm_pipe_write(xpipe, buffer, nbytes ))<=0) {
+            return(written!=0)?((ssize_t) written):retval;
+        }
+        written += (size_t) retval;
+        buffer += (ptrdiff_t) retval;
+        nbytes -= (size_t) retval;
+    }
+
+    return (ssize_t) written;
+
+}
+
+
+ssize_t xen_shm_pipe_read_all(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes) {
+    size_t read;
+    ssize_t retval;
+    const uint8_t* buffer;
+
+    read = 0;
+    buffer = (uint8_t*) buf;
+    while(nbytes) {
+        if((retval = xen_shm_pipe_read(xpipe, buffer, nbytes ))<=0) {
+            return(read!=0)?((ssize_t) read):retval;
+        }
+        read += (size_t) retval;
+        buffer += (ptrdiff_t) retval;
+        nbytes -= (size_t) retval;
+    }
+
+    return (ssize_t) read;
+
+}
+
 
