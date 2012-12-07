@@ -24,7 +24,9 @@
 
 #define XEN_SHM_PIPE_PAGE_SIZE 4096 //Todo, find an interface
 
-#define XEN_SHM_PIPE_UPDATE_SIZE 2000 //When write or read, updates pointers at list every <value> red or written bytes
+
+#define XEN_SHM_PIPE_INITIAL_WAIT_CHECK_INTERVAL 128 //Will check for the other after the first <value> written or read values (for better delays, it is a small value)
+#define XEN_SHM_PIPE_WAIT_CHECK_PER_ROUND 4 //Minimal number of time the writer/read checks the otherone state while writing/reading
 
 /* Different reader/writer flags */
 #define XSHMP_OPENED  0x00000001u
@@ -40,7 +42,7 @@ struct xen_shm_pipe_priv {
     struct xen_shm_pipe_shared* shared;
 
     size_t buffer_size;
-
+    ptrdiff_t wait_check_interval;
 
 };
 
@@ -164,7 +166,7 @@ xen_shm_pipe_offers(xen_shm_pipe_p xpipe, uint8_t page_count,
     *offerer_domid = (uint32_t) init_offerer.local_domid;
     *grant_ref = (uint32_t) init_offerer.grant;
     p->buffer_size = (size_t) page_count*XEN_SHM_PIPE_PAGE_SIZE - sizeof(struct xen_shm_pipe_shared);
-
+    p->wait_check_interval = ((ptrdiff_t) p->buffer_size)/XEN_SHM_PIPE_WAIT_CHECK_PER_ROUND;
     //init structure
     p->shared->reader_flags = 0;
     p->shared->writer_flags = 0;
@@ -205,7 +207,7 @@ xen_shm_pipe_connect(xen_shm_pipe_p xpipe, uint8_t page_count, uint32_t offerer_
     }
 
     p->buffer_size = (size_t) page_count*XEN_SHM_PIPE_PAGE_SIZE - sizeof(struct xen_shm_pipe_shared);
-
+    p->wait_check_interval = ((ptrdiff_t) p->buffer_size)/XEN_SHM_PIPE_WAIT_CHECK_PER_ROUND;
     //Set my flag to open
     uint32_t* myflags = __xen_shm_pipe_get_flags(p, 1);
     *myflags |= XSHMP_OPENED;
@@ -338,7 +340,7 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
     current_buf = user_buf;
     usr_max_buf = user_buf + (ptrdiff_t) nbytes;
 
-    gran_max_buf = user_buf + (ptrdiff_t) XEN_SHM_PIPE_UPDATE_SIZE;
+    gran_max_buf = user_buf + (ptrdiff_t) XEN_SHM_PIPE_INITIAL_WAIT_CHECK_INTERVAL;
     circ_max_buf = user_buf;
     min_max_buf = user_buf;
 
@@ -372,7 +374,7 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
             if(s->writer_flags & XSHMP_WAITING) { //Writer is waiting
                 ioctl(p->fd, XEN_SHM_IOCTL_SSIG, 0);
             }
-            gran_max_buf += (ptrdiff_t) XEN_SHM_PIPE_UPDATE_SIZE;
+            gran_max_buf += p->wait_check_interval;
         }
 
         if(read_pos == shared_max) { //Time to check if the read pointer must be rewind
@@ -472,7 +474,7 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
     current_buf = user_buf;
     usr_max_buf = user_buf + (ptrdiff_t) nbytes;
 
-    gran_max_buf = user_buf + (ptrdiff_t) XEN_SHM_PIPE_UPDATE_SIZE;
+    gran_max_buf = user_buf + (ptrdiff_t) XEN_SHM_PIPE_INITIAL_WAIT_CHECK_INTERVAL;
     circ_max_buf = user_buf;
     min_max_buf = user_buf;
 
@@ -508,7 +510,7 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
             if(s->reader_flags & XSHMP_WAITING) { //Reader is waiting
                 ioctl(p->fd, XEN_SHM_IOCTL_SSIG, 0);
             }
-            gran_max_buf += (ptrdiff_t) XEN_SHM_PIPE_UPDATE_SIZE;
+            gran_max_buf += p->wait_check_interval;
         }
 
         if(write_pos == shared_max) {
