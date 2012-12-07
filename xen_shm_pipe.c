@@ -540,13 +540,13 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
 }
 
 
-ssize_t xen_shm_pipe_write_all(xen_shm_pipe_p xpipe, void* buf, size_t nbytes) {
+ssize_t xen_shm_pipe_write_all(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes) {
     size_t written;
     ssize_t retval;
     uint8_t* buffer;
 
     written = 0;
-    buffer = (uint8_t*) buf;
+    buffer = (const uint8_t*) buf;
     while(nbytes) {
         if((retval = xen_shm_pipe_write(xpipe, buffer, nbytes ))<=0) {
             return(written!=0)?((ssize_t) written):retval;
@@ -561,7 +561,7 @@ ssize_t xen_shm_pipe_write_all(xen_shm_pipe_p xpipe, void* buf, size_t nbytes) {
 }
 
 
-ssize_t xen_shm_pipe_read_all(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes) {
+ssize_t xen_shm_pipe_read_all(xen_shm_pipe_p xpipe, void* buf, size_t nbytes) {
     size_t read;
     ssize_t retval;
     const uint8_t* buffer;
