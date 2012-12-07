@@ -126,6 +126,7 @@ xen_shm_pipe_init(xen_shm_pipe_p * xpipe,enum xen_shm_pipe_mod mod,enum xen_shm_
     p->stats.ioctl_count_ssig = 0;
     p->stats.read_count = 0;
     p->stats.write_count = 0;
+    p->stats.waiting = 0;
 #endif
 
     return 0;
@@ -353,8 +354,12 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
         if(!(other_flags & XSHMP_WAITING)) { //If the other is not waiting, we wait
 #ifdef XSHMP_STATS
             p->stats.ioctl_count_await++;
+            p->stats.waiting = 1;
 #endif
             ioctl_ret = ioctl(p->fd, XEN_SHM_IOCTL_AWAIT, &await_op);
+#ifdef XSHMP_STATS
+            p->stats.ioctl_count_await++;
+#endif
         } else { //We can't wait, so we send a signal
 #ifdef XSHMP_STATS
             p->stats.ioctl_count_ssig++;
@@ -376,7 +381,11 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
             s->reader_flags &= ~XSHMP_WAITING; //Stop waiting
             return -1;
         }
-
+#ifdef XSHMP_STATS
+        else {
+            p->stats.waiting = 0;
+        }
+#endif
     }
     s->reader_flags &= ~XSHMP_WAITING; //Stop waiting
 
@@ -564,11 +573,17 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
         if(!(other_flags & XSHMP_WAITING)) {
 #ifdef XSHMP_STATS
             p->stats.ioctl_count_await++;
+            p->stats.waiting = 1;
 #endif
             if(ioctl(p->fd, XEN_SHM_IOCTL_AWAIT, &await_op)) {
                 s->writer_flags &= ~XSHMP_WAITING; //Stop waiting
                 return -1; //Another error
             }
+#ifdef XSHMP_STATS
+            else {
+                p->stats.waiting = 0;
+            }
+#endif
         } else {
 #ifdef XSHMP_STATS
             p->stats.ioctl_count_ssig++;

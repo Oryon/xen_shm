@@ -46,6 +46,7 @@ clean(int sig)
     printf("Signal calls : %"PRIu64"\n", stats.ioctl_count_ssig);
     printf("Write calls  : %"PRIu64"\n", stats.write_count);
     printf("Read calls   : %"PRIu64"\n", stats.read_count);
+    printf("Waiting      : %"PRIu8"\n", stats.waiting);
 #endif
 
 
