@@ -108,6 +108,8 @@ struct xen_shm_ioctlarg_await {
 #define XEN_SHM_IOCTL_AWAIT_USER 0x01
 /* Waits for the channel to have been initialized. */
 #define XEN_SHM_IOCTL_AWAIT_INIT 0x02
+/* Among all calls specifying this flag, only one can wait. Others return -EDEADLK  */
+#define XEN_SHM_IOCTL_AWAIT_MUTEX 0x04
 
 
 /*

@@ -21,6 +21,7 @@
 /*
  * Headers for file system implementation
  */
+#include <asm/atomic.h>
 #include <asm/page.h>
 #include <asm/signal.h>
 #include <asm/xen/hypercall.h>
@@ -182,12 +183,14 @@ struct xen_shm_meta_page_data {
      * Informations about the event channel
      */
     evtchn_port_t offerer_ec_port; //Offerer's event channel port
+    atomic_t ec_mutex_count;
 
     /*
      * An array containing 'pages_count' grant referances.
      * The first needs to be sent to the receiver, but they are all written here.
      */
     grant_ref_t grant_refs[XEN_SHM_ALLOC_ALIGNED_PAGES];
+
 };
 
 
@@ -693,6 +696,7 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
     meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
     meta_page_p->offerer_state = XEN_SHM_META_PAGE_STATE_NONE;
     meta_page_p->receiver_state = XEN_SHM_META_PAGE_STATE_NONE;
+    meta_page_p->ec_mutex_count = ATOMIC_INIT(1);
 
     meta_page_p->pages_count = data->pages_count;
 
@@ -884,6 +888,15 @@ __xen_shm_ioctl_await(struct xen_shm_instance_data* data,
 
     meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
 
+    if(__xen_shm_is_broken_pipe(meta_page_p)) {//Broken pipe, before mutex
+        return -EPIPE;
+    }
+
+    if(!atomic_dec_and_test(&meta_page_p->ec_mutex_count)) {
+        atomic_inc(&meta_page_p->ec_mutex_count);
+        return -EDEADLK;
+    }
+
     //Condition telling wether the pipe is known to be closed
 
     data->user_signal = 0; //Trigger the wait
@@ -893,7 +906,7 @@ __xen_shm_ioctl_await(struct xen_shm_instance_data* data,
                 (user_flag&&data->user_signal) || (init_flag&&data->initial_signal) ||
                 __xen_shm_is_broken_pipe(meta_page_p));
         if(retval < 0) {
-            return retval;
+            goto unlock_and_return;
         }
     } else {
         jiffies = (arg->timeout_ms*HZ)/1000;
@@ -903,17 +916,22 @@ __xen_shm_ioctl_await(struct xen_shm_instance_data* data,
                 __xen_shm_is_broken_pipe(meta_page_p),
                         jiffies);
         if(retval < 0) {
-            return retval;
+            goto unlock_and_return;
         }
         arg->remaining_ms = (retval==jiffies)?arg->timeout_ms:(retval*1000)/HZ;
         retval = 0;
     }
 
     if(__xen_shm_is_broken_pipe(meta_page_p)) {
-        return -EPIPE;
+        retval = -EPIPE;
+        goto unlock_and_return;
     }
 #undef XEN_SHM_IOCTL_AWAIT_COND
     return 0;
+
+unlock_and_return:
+    atomic_inc(&meta_page_p->ec_mutex_count);
+    return retval;
 
 }
 
