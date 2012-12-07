@@ -266,7 +266,7 @@ int main(int argc, char **argv) {
 
     if(strcmp(argv[1], "reader") == 0) {
         pipe_reader(argc, argv);
-    } else if(strcmp(argv[1], "writer")) {
+    } else if(strcmp(argv[1], "writer")==0) {
         pipe_writer(argc, argv);
     }
     usage();
