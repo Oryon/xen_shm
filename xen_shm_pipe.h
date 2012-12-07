@@ -84,12 +84,27 @@ int xen_shm_pipe_wait(xen_shm_pipe_p pipe, unsigned long timeout_ms);
 
 
 
-
+/*
+ * Writes into the pipe. Returns the number of written bytes or -1 and errno is set.
+ */
 ssize_t xen_shm_pipe_write(xen_shm_pipe_p pipe, const void* buf, size_t nbytes);
 
+/*
+ * Does as write but retry and block until no more bytes can be written or all the nbytes were actually written.
+ * Warning: When the pipe is closing, the number of written bytes can take any value between 1 and nbytes.
+ */
+ssize_t xen_shm_pipe_write_all(xen_shm_pipe_p pipe, const void* buf, size_t nbytes);
 
+/*
+ * Read in the pipe. Returns the number of read bytes, 0 if EOF, or -1 and errno is set.
+ */
 ssize_t xen_shm_pipe_read(xen_shm_pipe_p pipe, void* buf, size_t nbytes);
 
+/*
+ * Does as read but retry and block until no more bytes can be read.
+ * Warning: When the pipe is closing, the number of read bytes can take any value between 1 and nbytes.
+ */
+ssize_t xen_shm_pipe_read_all(xen_shm_pipe_p pipe, void* buf, size_t nbytes);
 
 /*
  * All pipes must be freed when they are not used anymore.
