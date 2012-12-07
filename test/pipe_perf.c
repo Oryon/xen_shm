@@ -16,6 +16,16 @@ static uint64_t byte_count;
 static xen_shm_pipe_p xpipe;
 
 
+void usage(void);
+void pipe_read(void);
+void pipe_write(void);
+void init_pipe_reader(void);
+void init_pipe_writer(void);
+void read_pc_and_size(int argc, char **argv);
+void pipe_reader(int argc, char **argv);
+void pipe_writer(int argc, char **argv);
+
+
 static void
 clean(int sig)
 {
@@ -85,7 +95,7 @@ void pipe_write(void) {
             perror("Xen pipe write");
             clean(0);
         } else if(retval == 0) {
-            printf("Write retval = 0 ??!!\n");
+            printf("Write retval = 0 !\n");
             clean(0);
         }
         byte_count+=(uint64_t) retval;
@@ -206,7 +216,7 @@ void pipe_reader(int argc, char **argv) {
         usage();
     }
 
-    read_pc_and_size();
+    read_pc_and_size(argc, argv);
 
     init_pipe_reader();
 
@@ -216,13 +226,12 @@ void pipe_reader(int argc, char **argv) {
 
 
 void pipe_writer(int argc, char **argv) {
-    uint32_t buffer_size;
 
     if(argc < 5) {
         usage();
     }
 
-    read_pc_and_size();
+    read_pc_and_size(argc, argv);
 
     if(sscanf(argv[4], "%"SCNu32, &iterations) ) {
         printf("Iterations: %"PRIu32"\n", iterations);
