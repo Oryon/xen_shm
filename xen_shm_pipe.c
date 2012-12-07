@@ -365,7 +365,8 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
          * Actually read
          */
         //Tests 64b alignement
-        if(0 && ( ((unsigned long) current_buf) & ((unsigned long) 0x3u)) == ( ((unsigned long)read_pos) & ((unsigned long) 0x3u)) && min_max_buf - current_buf > 12) {
+        if( (((unsigned long) current_buf) & ((unsigned long) 0x3u)) == (((unsigned long)read_pos) & ((unsigned long) 0x3u))
+                && min_max_buf - current_buf > 24) {
             //Align optimized
             while( ((unsigned long) current_buf) & ((unsigned long) 0x3u)) { //Slow copy to align with 64b pointers
                 *current_buf = *read_pos;
@@ -373,7 +374,7 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
                 ++read_pos;
             }
 
-            min_max_buf64 = ((uint64_t*)( ((unsigned long)min_max_buf) & ~((unsigned long) 0x3u) )) - 1; //Previous aligned
+            min_max_buf64 = (uint64_t*)( ((unsigned long)min_max_buf) & ~((unsigned long) 0x3u)  );
             current_buf64 = (uint64_t*)(current_buf);
             read_pos64 = (uint64_t*)(read_pos);
             while(current_buf64 != min_max_buf64) { //Fast copy
@@ -533,25 +534,26 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
             min_max_buf = gran_max_buf;
         }
 
-        printf("min_max_buf: %"PRIX64"\n", (uint64_t) min_max_buf );
-	printf("usr_max_buf: %"PRIX64"\n", (uint64_t) usr_max_buf );
-	printf("gran_max_buf: %"PRIX64"\n\n", (uint64_t) gran_max_buf );
+        //printf("min_max_buf: %"PRIX64"\n", (uint64_t) min_max_buf );
+        //printf("usr_max_buf: %"PRIX64"\n", (uint64_t) usr_max_buf );
+        //printf("gran_max_buf: %"PRIX64"\n\n", (uint64_t) gran_max_buf );
 
         /*
          * Actually write
          */
 
         //Tests 64b alignement
-        if(( 0 &&  (unsigned long) current_buf & ((unsigned long) 0x3u))  == ((unsigned long) write_pos & ((unsigned long) 0x3u)) && min_max_buf - current_buf > 12) {
+        if(  (((unsigned long) current_buf) & ((unsigned long) 0x3u)) == (((unsigned long) write_pos) & ((unsigned long) 0x3u))
+                && min_max_buf - current_buf > 24  ) {
             //Align optimized
-            printf("blah");
+            //printf("blah\n");
             while( ((unsigned long) current_buf) & ((unsigned long) 0x3u)) { //Slow copy to align with 64b pointers
                 *write_pos = *current_buf;
                 ++current_buf;
                 ++write_pos;
             }
 
-            min_max_buf64 = ((uint64_t*)( ((unsigned long) min_max_buf) & ~((unsigned long) 0x3u))) - 1; //Previous aligned
+            min_max_buf64 = (uint64_t*)( ((unsigned long) min_max_buf) & ~((unsigned long) 0x3u)); //Previous aligned
             current_buf64 = (const uint64_t*)(current_buf);
             write_pos64 = (uint64_t*)(write_pos);
             while(current_buf64 != min_max_buf64) { //Fast copy
@@ -572,7 +574,7 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
         } else {
             //Slow speed
             while(current_buf != min_max_buf) {
-                printf("current_buf: %"PRIX64"\n", (uint64_t) current_buf );
+                //printf("current_buf: %"PRIX64"\n", (uint64_t) current_buf );
                 *write_pos = *current_buf;
                 ++current_buf;
                 ++write_pos;
