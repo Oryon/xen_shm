@@ -350,7 +350,7 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
         }
 
 
-
+        ioctl_ret = 0;
         if(!(other_flags & XSHMP_WAITING)) { //If the other is not waiting, we wait
 #ifdef XSHMP_STATS
             p->stats.ioctl_count_await++;
