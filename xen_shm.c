@@ -666,6 +666,7 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
     int page;
     char *page_pointer;
     struct xen_shm_meta_page_data *meta_page_p;
+    atomic_t atomic = ATOMIC_INIT(1);
 
     if (data->state != XEN_SHM_STATE_OPENED) {
         /* Command is invalid in this state */
@@ -696,7 +697,7 @@ __xen_shm_ioctl_init_offerer(struct xen_shm_instance_data* data,
     meta_page_p = (struct xen_shm_meta_page_data*) data->shared_memory;
     meta_page_p->offerer_state = XEN_SHM_META_PAGE_STATE_NONE;
     meta_page_p->receiver_state = XEN_SHM_META_PAGE_STATE_NONE;
-    meta_page_p->ec_mutex_count = ATOMIC_INIT(1);
+    meta_page_p->ec_mutex_count = atomic;
 
     meta_page_p->pages_count = data->pages_count;
 
@@ -877,9 +878,11 @@ __xen_shm_ioctl_await(struct xen_shm_instance_data* data,
     int retval;
     int user_flag;
     int init_flag;
+    int mutex_flag;
 
     user_flag = arg->request_flags & XEN_SHM_IOCTL_AWAIT_USER;
     init_flag = arg->request_flags & XEN_SHM_IOCTL_AWAIT_INIT;
+    mutex_flag = arg->request_flags & XEN_SHM_IOCTL_AWAIT_MUTEX;
 
     if(data->state == XEN_SHM_STATE_OPENED) //Not opened yet
     {
@@ -892,7 +895,7 @@ __xen_shm_ioctl_await(struct xen_shm_instance_data* data,
         return -EPIPE;
     }
 
-    if(!atomic_dec_and_test(&meta_page_p->ec_mutex_count)) {
+    if(mutex_flag && !atomic_dec_and_test(&meta_page_p->ec_mutex_count)) {
         atomic_inc(&meta_page_p->ec_mutex_count);
         return -EDEADLK;
     }
@@ -927,10 +930,13 @@ __xen_shm_ioctl_await(struct xen_shm_instance_data* data,
         goto unlock_and_return;
     }
 #undef XEN_SHM_IOCTL_AWAIT_COND
-    return 0;
+    retval = 0;
+
 
 unlock_and_return:
-    atomic_inc(&meta_page_p->ec_mutex_count);
+    if(mutex_flag) {
+        atomic_inc(&meta_page_p->ec_mutex_count);
+    }
     return retval;
 
 }
