@@ -29,9 +29,10 @@
 #define XEN_SHM_PIPE_WAIT_CHECK_PER_ROUND 4 //Minimal number of time the writer/read checks the otherone state while writing/reading
 
 /* Different reader/writer flags */
-#define XSHMP_OPENED  0x00000001u
-#define XSHMP_CLOSED  0x00000002u
-#define XSHMP_WAITING 0x00000004u
+#define XSHMP_OPENED   0x00000001u
+#define XSHMP_CLOSED   0x00000002u
+#define XSHMP_WAITING  0x00000004u
+#define XSHMP_SLEEPING 0x00000008u
 
 
 
@@ -47,6 +48,9 @@ struct xen_shm_pipe_priv {
 
     size_t buffer_size;
     ptrdiff_t wait_check_interval;
+    struct xen_shm_ioctlarg_await await_op;
+    int saw_epipe;
+
 
 #ifdef XSHMP_STATS
     struct xen_shm_pipe_stats stats;
@@ -119,6 +123,9 @@ xen_shm_pipe_init(xen_shm_pipe_p * xpipe,enum xen_shm_pipe_mod mod,enum xen_shm_
     p->conv = conv;
     p->mod = mod;
     p->shared = NULL;
+    p->await_op.request_flags = XEN_SHM_IOCTL_AWAIT_USER;
+    p->await_op.timeout_ms = 0;
+    p->saw_epipe = 0;
     *xpipe = p;
 
 #ifdef XSHMP_STATS
@@ -273,17 +280,160 @@ void xen_shm_pipe_free(xen_shm_pipe_p xpipe) {
     free(xpipe);
 }
 
+int
+__xen_shm_pipe_send_signal(struct xen_shm_pipe_priv* p) {
+#ifdef XSHMP_STATS
+            p->stats.ioctl_count_ssig++;
+#endif
+            return ioctl(p->fd, XEN_SHM_IOCTL_SSIG, 0);
+}
 
+int
+__xen_shm_pipe_wait_signal(struct xen_shm_pipe_priv* p) {
+#ifdef XSHMP_STATS
+            p->stats.ioctl_count_await++;
+#endif
+            return ioctl(p->fd, XEN_SHM_IOCTL_AWAIT, &p->await_op);
+}
 
-ssize_t
-xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
-{
-    struct xen_shm_pipe_priv* p;
+/* Waits for available bytes to read. Return -1 if error. 0 if end of file. 1 if bytes available. */
+int
+__xen_shm_pipe_wait_reader(struct xen_shm_pipe_priv* p) {
     struct xen_shm_pipe_shared* s;
-    struct xen_shm_ioctlarg_await await_op;
-    int ioctl_ret;
+    volatile struct xen_shm_pipe_shared* sv;
 
-    uint32_t other_flags;
+    uint32_t writer_flags;
+    uint32_t read;
+    int retval;
+    int unset_wait;
+
+    s = p->shared;
+    sv = p->shared;
+
+    unset_wait = 0;
+    read = s->read;
+    while(read == sv->write) {
+
+        writer_flags = sv->writer_flags;
+
+        s->reader_flags |= XSHMP_WAITING; //Say we are waiting
+        unset_wait = 1;
+
+        if(read != sv->write) { //Check nothing changed
+            break;
+        }
+
+        if(writer_flags & XSHMP_CLOSED) { //File was closed and no bytes remaining
+            return 0;
+        }
+
+        if(p->saw_epipe) { //File is not closed but we saw a EPIPE. It's an error.
+            errno = EPIPE;
+            return -1;
+        }
+
+        if(writer_flags & XSHMP_SLEEPING) { //Other is sleeping, must send a signal
+            __xen_shm_pipe_send_signal(p);
+            continue;
+        }
+
+        if(writer_flags & XSHMP_WAITING) { //Other is waiting, must do an active wait
+            continue;
+        }
+
+        s->reader_flags |= XSHMP_SLEEPING; //Say we are sleeping
+        retval = __xen_shm_pipe_wait_signal(p);
+        s->reader_flags &= ~XSHMP_SLEEPING; //Wake up !
+        if(retval == -1) {
+            if(errno == EPIPE) {
+                p->saw_epipe = 1;
+                continue;
+            } else {
+                s->writer_flags &= ~XSHMP_WAITING;
+                return -1;
+            }
+        }
+
+    }
+
+    if(unset_wait) {
+        s->reader_flags &= ~XSHMP_WAITING;
+    }
+
+    return 1;
+}
+
+
+/* Waits for available bytes to read. Return -1 if error. 0 if end of file. 1 if bytes available. */
+int
+__xen_shm_pipe_wait_writer(struct xen_shm_pipe_priv* p) {
+    struct xen_shm_pipe_shared* s;
+    volatile struct xen_shm_pipe_shared* sv;
+
+    uint32_t reader_flags;
+    uint32_t write;
+    int retval;
+    int unset_wait;
+
+    s = p->shared;
+    sv = p->shared;
+
+    unset_wait = 0;
+
+    if(sv->reader_flags & XSHMP_CLOSED) { //File was closed
+        return -1;
+    }
+
+    write = s->write + 1;
+    if(write == p->buffer_size) {
+        write = 0;
+    }
+
+    while(write == sv->read) {
+
+        reader_flags = sv->reader_flags;
+
+        s->writer_flags |= XSHMP_WAITING; //Say we are waiting
+        unset_wait = 1;
+
+        if(write != sv->read) { //Check nothing changed
+            break;
+        }
+
+        if(reader_flags & XSHMP_CLOSED) { //File was closed
+            return -1;
+        }
+
+        if(reader_flags & XSHMP_SLEEPING) { //Other is sleeping, must send a signal
+            __xen_shm_pipe_send_signal(p);
+            continue;
+        }
+
+        if(reader_flags & XSHMP_WAITING) { //Other is waiting, must do an active wait
+            continue;
+        }
+
+        s->writer_flags |= XSHMP_SLEEPING; //Say we are sleeping
+        retval = __xen_shm_pipe_wait_signal(p);
+        s->writer_flags &= ~XSHMP_SLEEPING; //Wake up !
+        if(retval == -1) {
+            s->writer_flags &= ~XSHMP_WAITING;
+            return -1;
+        }
+
+    }
+
+    if(unset_wait) {
+        s->writer_flags &= ~XSHMP_WAITING;
+    }
+
+    return 1;
+}
+
+size_t
+__xen_shm_pipe_read_avail(struct xen_shm_pipe_priv* p, void* buf, size_t nbytes) {
+    struct xen_shm_pipe_shared* s;
+    volatile struct xen_shm_pipe_shared* sv;
 
     uint8_t* user_buf; //A cast of the given user buffer
 
@@ -302,99 +452,12 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
     uint8_t* min_max_buf;//Min value of the 3 different out of bound
     uint64_t* min_max_buf64;//64b aligned
 
-    p = xpipe;
-
-#ifdef XSHMP_STATS
-    p->stats.read_count++;
-#endif
-
-    if(p->mod == xen_shm_pipe_mod_write) { //Not reader
-        errno = EMEDIUMTYPE;
-        return -1;
-    }
-
-    if(p->shared == NULL) { //Not initialized
-        errno = EMEDIUMTYPE;
-        return -1;
-    }
-
     s = p->shared;
-    if(s->reader_flags & XSHMP_CLOSED) {//Closed
-        return 0;
-    }
-
-    //Prepare wait structure
-    await_op.request_flags = XEN_SHM_IOCTL_AWAIT_USER | XEN_SHM_IOCTL_AWAIT_MUTEX;
-    await_op.timeout_ms = 0;
+    sv = p->shared;
 
     shared_max = s->buffer + (ptrdiff_t) p->buffer_size;
-
-    other_flags = s->writer_flags;
     read_pos = s->buffer + (ptrdiff_t) s->read ;
-    write_pos = s->buffer + (ptrdiff_t) s->write ;
-
-    //Wait for available data
-    while(read_pos == write_pos) {
-
-        if(other_flags & XSHMP_CLOSED){ //Maybe it was gracefully closed
-            s->reader_flags &= ~XSHMP_WAITING; //Stop waiting
-            return 0;
-        }
-
-        s->reader_flags |= XSHMP_WAITING; //Notify that we are waiting
-
-        //Check after flag is set, if not modified, the other MUST know the flag has been changed
-        write_pos = s->buffer + (ptrdiff_t) s->write ;
-        if(read_pos != write_pos) {
-            break;
-        }
-
-
-        ioctl_ret = 0;
-        if(!(other_flags & XSHMP_WAITING)) { //If the other is not waiting, we wait
-#ifdef XSHMP_STATS
-            p->stats.ioctl_count_await++;
-            p->stats.waiting = 1;
-#endif
-            ioctl_ret = ioctl(p->fd, XEN_SHM_IOCTL_AWAIT, &await_op);
-#ifdef XSHMP_STATS
-            p->stats.ioctl_count_await++;
-#endif
-        } else { //We can't wait, so we send a signal
-#ifdef XSHMP_STATS
-            p->stats.ioctl_count_ssig++;
-#endif
-            ioctl(p->fd, XEN_SHM_IOCTL_SSIG, 0);
-        }
-
-        other_flags = s->writer_flags;
-        write_pos = s->buffer + (ptrdiff_t) s->write ;
-
-        if(ioctl_ret) {
-            if(errno == EPIPE) { //Other side is not here
-                if(read_pos == write_pos) { //We read everything
-                    s->reader_flags &= ~XSHMP_WAITING; //Stop waiting
-                    return (other_flags & XSHMP_CLOSED)?0:-1;
-                } //Ignore error and read
-                break;
-            } else if (errno == EDEADLK) { //Other process is waiting
-#ifdef XSHMP_STATS
-                p->stats.ioctl_count_ssig++;
-#endif
-                ioctl(p->fd, XEN_SHM_IOCTL_SSIG, 0);
-                break;
-            }
-            //True error (like interrupt)
-            s->reader_flags &= ~XSHMP_WAITING; //Stop waiting
-            return -1;
-        }
-#ifdef XSHMP_STATS
-        else {
-            p->stats.waiting = 0;
-        }
-#endif
-    }
-    s->reader_flags &= ~XSHMP_WAITING; //Stop waiting
+    write_pos = s->buffer + (ptrdiff_t) sv->write ;
 
     user_buf = (uint8_t*) buf;
 
@@ -460,18 +523,12 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
         }
 
 
-
-
-
         /*
          * Check boundary values
          */
         if(current_buf == gran_max_buf) { //Time to take news of the other guy
-            if(s->writer_flags & XSHMP_WAITING) { //Writer is waiting
-#ifdef XSHMP_STATS
-                p->stats.ioctl_count_ssig++;
-#endif
-                ioctl(p->fd, XEN_SHM_IOCTL_SSIG, 0);
+            if(sv->writer_flags & XSHMP_SLEEPING) { //Writer is waiting
+                __xen_shm_pipe_send_signal(p);
             }
             gran_max_buf += p->wait_check_interval;
         }
@@ -480,37 +537,31 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
             read_pos = s->buffer;
         }
 
-        write_pos = s->buffer + (ptrdiff_t) s->write; //Updates write_pos value (it could have changed)
+        write_pos = s->buffer + (ptrdiff_t) sv->write; //Updates write_pos value (it could have changed)
         s->read = (uint32_t) (read_pos - s->buffer); //Update read position in shared memory
 
         if(read_pos <= write_pos) { //Updates the circ buffer threshold
             circ_max_buf = current_buf + (ptrdiff_t)(write_pos - read_pos);
         } else {
-            circ_max_buf = current_buf +  (ptrdiff_t)(shared_max - read_pos);
+            circ_max_buf = current_buf + (ptrdiff_t)(shared_max - read_pos);
         }
 
 
     }
 
-    if(s->writer_flags & XSHMP_WAITING) { //Writer is waiting
-#ifdef XSHMP_STATS
-    p->stats.ioctl_count_ssig++;
-#endif
-        ioctl(p->fd, XEN_SHM_IOCTL_SSIG, 0);
+    if(sv->writer_flags & XSHMP_SLEEPING) { //Writer is waiting
+        __xen_shm_pipe_send_signal(p);
     }
 
 
-    return (ssize_t) (current_buf - user_buf);
+    return (size_t) (current_buf - user_buf);
+
 }
 
-
-
-ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes) {
-    struct xen_shm_pipe_priv* p;
+size_t
+__xen_shm_pipe_write_avail(struct xen_shm_pipe_priv* p, const void* buf, size_t nbytes) {
     struct xen_shm_pipe_shared* s;
-    struct xen_shm_ioctlarg_await await_op;
-
-    uint32_t other_flags;
+    volatile struct xen_shm_pipe_shared* sv;
 
     uint8_t* read_pos_reduced; //Read pointer - 1 in circular buffer
     uint8_t* write_pos;//Write pointer in circ buff
@@ -528,94 +579,14 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
     const uint8_t* min_max_buf;//Min value of the 3 different out of bound
     const uint64_t* min_max_buf64;//64b aligned
 
-    p = xpipe;
-#ifdef XSHMP_STATS
-    p->stats.write_count++;
-#endif
-    if(p->mod == xen_shm_pipe_mod_read) { //Not reader
-        errno = EMEDIUMTYPE;
-        return -1;
-    }
-
-    if(p->shared == NULL) { //Not initialized
-        errno = EMEDIUMTYPE;
-        return -1;
-    }
-
     s = p->shared;
-    if(s->writer_flags & XSHMP_CLOSED) {//Closed
-        errno = EPIPE;
-        return -1;
-    }
-
-    //Prepare wait structure
-    await_op.request_flags = XEN_SHM_IOCTL_AWAIT_USER | XEN_SHM_IOCTL_AWAIT_MUTEX;
-    await_op.timeout_ms = 0;
+    sv = p->shared;
 
     shared_max = s->buffer + (ptrdiff_t) p->buffer_size;
 
-    other_flags = s->reader_flags;
-    read_pos_reduced = s->buffer + (ptrdiff_t) s->read;
+    read_pos_reduced = s->buffer + (ptrdiff_t) sv->read;
     read_pos_reduced = (read_pos_reduced == s->buffer)?(shared_max-1):(read_pos_reduced-1);
     write_pos = s->buffer + (ptrdiff_t) s->write ;
-
-    //Wait for available space
-    while(read_pos_reduced == write_pos) {
-        if(s->reader_flags & XSHMP_CLOSED) { //Maybe it was gracefully closed
-            s->writer_flags &= ~XSHMP_WAITING; //Stop waiting
-            errno = EPIPE;
-            return -1;
-        }
-
-        s->writer_flags |= XSHMP_WAITING; //Notify that we are waiting
-
-
-        //Check after flag is set, if not modified, the other MUST know the flag has been changed
-        read_pos_reduced = s->buffer + (ptrdiff_t) s->read;
-        read_pos_reduced = (read_pos_reduced == s->buffer)?(shared_max-1):(read_pos_reduced-1);
-        if(read_pos_reduced != write_pos) {
-            break;
-        }
-
-        if(!(other_flags & XSHMP_WAITING)) {
-#ifdef XSHMP_STATS
-            p->stats.ioctl_count_await++;
-            p->stats.waiting = 1;
-#endif
-            if(ioctl(p->fd, XEN_SHM_IOCTL_AWAIT, &await_op)) {
-
-                if (errno == EDEADLK) { //Other process is waiting
-#ifdef XSHMP_STATS
-                    p->stats.ioctl_count_ssig++;
-#endif
-                    ioctl(p->fd, XEN_SHM_IOCTL_SSIG, 0);
-                    break;
-                }
-
-                s->writer_flags &= ~XSHMP_WAITING; //Stop waiting
-                return -1; //Another error
-            }
-#ifdef XSHMP_STATS
-            else {
-                p->stats.waiting = 0;
-            }
-#endif
-        } else {
-#ifdef XSHMP_STATS
-            p->stats.ioctl_count_ssig++;
-#endif
-            ioctl(p->fd, XEN_SHM_IOCTL_SSIG, 0);
-        }
-
-
-        //Update positions
-        other_flags = s->reader_flags;
-        read_pos_reduced = s->buffer + (ptrdiff_t) s->read;
-        read_pos_reduced = (read_pos_reduced == s->buffer)?(shared_max-1):(read_pos_reduced-1);
-
-    }
-    s->writer_flags &= ~XSHMP_WAITING; //Stop waiting
-
 
     user_buf = (const uint8_t*) buf;
 
@@ -625,8 +596,6 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
     gran_max_buf = user_buf + (ptrdiff_t) XEN_SHM_PIPE_INITIAL_WAIT_CHECK_INTERVAL;
     circ_max_buf = user_buf;
     min_max_buf = user_buf;
-
-    shared_max = s->buffer + (ptrdiff_t) p->buffer_size;
 
     while(write_pos != read_pos_reduced && current_buf != usr_max_buf) //We write as much as we can
     {
@@ -642,10 +611,6 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
             min_max_buf = gran_max_buf;
         }
 
-        //printf("min_max_buf: %"PRIX64"\n", (uint64_t) min_max_buf );
-        //printf("usr_max_buf: %"PRIX64"\n", (uint64_t) usr_max_buf );
-        //printf("gran_max_buf: %"PRIX64"\n\n", (uint64_t) gran_max_buf );
-
         /*
          * Actually write
          */
@@ -654,7 +619,6 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
         if(  (((unsigned long) current_buf) & ((unsigned long) 0x7u)) == (((unsigned long) write_pos) & ((unsigned long) 0x7u))
                 && min_max_buf - current_buf > 24  ) {
             //Align optimized
-            //printf("blah\n");
             while( ((unsigned long) current_buf) & ((unsigned long) 0x7u)) { //Slow copy to align with 64b pointers
                 *write_pos = *current_buf;
                 ++current_buf;
@@ -682,7 +646,6 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
         } else {
             //Slow speed
             while(current_buf != min_max_buf) {
-                //printf("current_buf: %"PRIX64"\n", (uint64_t) current_buf );
                 *write_pos = *current_buf;
                 ++current_buf;
                 ++write_pos;
@@ -693,11 +656,8 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
          * Check boundary values
          */
         if(current_buf == gran_max_buf) { //Time to take news of the other guy
-            if(s->reader_flags & XSHMP_WAITING) { //Reader is waiting
-#ifdef XSHMP_STATS
-                p->stats.ioctl_count_ssig++;
-#endif
-                ioctl(p->fd, XEN_SHM_IOCTL_SSIG, 0);
+            if(sv->reader_flags & XSHMP_SLEEPING) { //Reader is waiting
+                __xen_shm_pipe_send_signal(p);
             }
             gran_max_buf += p->wait_check_interval;
         }
@@ -706,29 +666,94 @@ ssize_t xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes)
             write_pos = s->buffer;
         }
 
-        read_pos_reduced = s->buffer + (ptrdiff_t) s->read;
+        read_pos_reduced = s->buffer + (ptrdiff_t) sv->read;
         read_pos_reduced = (read_pos_reduced == s->buffer)?(shared_max-1):(read_pos_reduced-1);
         s->write = (uint32_t) (write_pos - s->buffer); //Update read position in shared memory
 
         if(write_pos <= read_pos_reduced) {
             circ_max_buf = current_buf + (ptrdiff_t)(read_pos_reduced - write_pos); //Write up to read reduced
         } else {
-            circ_max_buf = current_buf +  (ptrdiff_t)(shared_max - write_pos); //Read up to the end of the circular buffer
+            circ_max_buf = current_buf +  (ptrdiff_t)(shared_max - write_pos); //Write up to the end of the circular buffer
         }
 
     }
 
-    if(s->reader_flags & XSHMP_WAITING) { //Writer is waiting
-#ifdef XSHMP_STATS
-        p->stats.ioctl_count_ssig++;
-#endif
-        ioctl(p->fd, XEN_SHM_IOCTL_SSIG, 0);
+    if(sv->reader_flags & XSHMP_SLEEPING) { //Reader is waiting
+        __xen_shm_pipe_send_signal(p);
     }
 
 
-    return (ssize_t) (current_buf - user_buf);
+    return (size_t) (current_buf - user_buf);
+}
+
+ssize_t
+xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
+{
+    struct xen_shm_pipe_priv* p;
+    int wait_ret;
+
+    p = xpipe;
+
+#ifdef XSHMP_STATS
+    p->stats.read_count++;
+#endif
+
+    if(p->mod == xen_shm_pipe_mod_write) { //Not reader
+        errno = EMEDIUMTYPE;
+        return -1;
+    }
+
+    if(p->shared == NULL) { //Not initialized
+        errno = EMEDIUMTYPE;
+        return -1;
+    }
+
+    if(p->shared->reader_flags & XSHMP_CLOSED) {//Closed
+        return 0;
+    }
+
+    wait_ret = __xen_shm_pipe_wait_reader(p);
+    if(wait_ret <= 0) {
+        return (ssize_t) wait_ret;
+    }
+
+    return __xen_shm_pipe_read_avail(p, buf, nbytes);
+}
 
 
+
+
+ssize_t
+xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes) {
+    struct xen_shm_pipe_priv* p;
+    int wait_ret;
+
+    p = xpipe;
+
+#ifdef XSHMP_STATS
+    p->stats.write_count++;
+#endif
+    if(p->mod == xen_shm_pipe_mod_read) { //Not reader
+        errno = EMEDIUMTYPE;
+        return -1;
+    }
+
+    if(p->shared == NULL) { //Not initialized
+        errno = EMEDIUMTYPE;
+        return -1;
+    }
+
+    if(p->shared->writer_flags & XSHMP_CLOSED) {//Closed
+        errno = EPIPE;
+        return -1;
+    }
+
+    wait_ret = __xen_shm_pipe_wait_reader(p);
+    if(wait_ret <= 0) {
+        return (ssize_t) wait_ret;
+    }
+
+    return (ssize_t) __xen_shm_pipe_write_avail(p, buf, nbytes);
 
 }
 
