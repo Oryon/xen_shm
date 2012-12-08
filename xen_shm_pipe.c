@@ -25,7 +25,7 @@
 #define XEN_SHM_PIPE_PAGE_SIZE 4096 //Todo, find an interface
 
 
-#define XEN_SHM_PIPE_INITIAL_WAIT_CHECK_INTERVAL 128 //Will check for the other after the first <value> written or read values (for better delays, it is a small value)
+#define XEN_SHM_PIPE_FAST_CHECK_INTERVAL 128 //Will check for the other after the first <value> written or read values (for better delays, it is a small value)
 #define XEN_SHM_PIPE_WAIT_CHECK_PER_ROUND 4 //Minimal number of time the writer/read checks the otherone state while writing/reading
 
 /* Different reader/writer flags */
@@ -471,12 +471,23 @@ __xen_shm_pipe_read_avail(struct xen_shm_pipe_priv* p, void* buf, size_t nbytes)
     current_buf = user_buf;
     usr_max_buf = user_buf + (ptrdiff_t) nbytes;
 
-    gran_max_buf = user_buf + (ptrdiff_t) XEN_SHM_PIPE_INITIAL_WAIT_CHECK_INTERVAL;
+    if(sv->writer_flags & XSHMP_SLEEPING) { //Writer is waiting
+        gran_max_buf = user_buf + (ptrdiff_t) XEN_SHM_PIPE_FAST_CHECK_INTERVAL;
+    } else {
+        gran_max_buf = user_buf + p->wait_check_interval;
+    }
+
     circ_max_buf = user_buf;
     min_max_buf = user_buf;
 
     while(read_pos != write_pos && current_buf != usr_max_buf) //We read as much as we can
     {
+
+        if(read_pos <= write_pos) { //Updates the circ buffer threshold
+            circ_max_buf = current_buf + (ptrdiff_t)(write_pos - read_pos);
+        } else {
+            circ_max_buf = current_buf + (ptrdiff_t)(shared_max - read_pos);
+        }
 
         /*
          * Get the minimum of different boundaries
@@ -547,11 +558,7 @@ __xen_shm_pipe_read_avail(struct xen_shm_pipe_priv* p, void* buf, size_t nbytes)
         write_pos = s->buffer + (ptrdiff_t) sv->write; //Updates write_pos value (it could have changed)
         s->read = (uint32_t) (read_pos - s->buffer); //Update read position in shared memory
 
-        if(read_pos <= write_pos) { //Updates the circ buffer threshold
-            circ_max_buf = current_buf + (ptrdiff_t)(write_pos - read_pos);
-        } else {
-            circ_max_buf = current_buf + (ptrdiff_t)(shared_max - read_pos);
-        }
+
 
 
     }
@@ -600,12 +607,23 @@ __xen_shm_pipe_write_avail(struct xen_shm_pipe_priv* p, const void* buf, size_t 
     current_buf = user_buf;
     usr_max_buf = user_buf + (ptrdiff_t) nbytes;
 
-    gran_max_buf = user_buf + (ptrdiff_t) XEN_SHM_PIPE_INITIAL_WAIT_CHECK_INTERVAL;
+    if(sv->reader_flags & XSHMP_SLEEPING) { //Reader is waiting
+        gran_max_buf = user_buf + (ptrdiff_t) XEN_SHM_PIPE_FAST_CHECK_INTERVAL;
+    } else {
+        gran_max_buf = user_buf + p->wait_check_interval;
+    }
+
     circ_max_buf = user_buf;
     min_max_buf = user_buf;
 
     while(write_pos != read_pos_reduced && current_buf != usr_max_buf) //We write as much as we can
     {
+
+        if(write_pos <= read_pos_reduced) { //Set the circ_max_buf value
+            circ_max_buf = current_buf + (ptrdiff_t)(read_pos_reduced - write_pos); //Write up to read reduced
+        } else {
+            circ_max_buf = current_buf +  (ptrdiff_t)(shared_max - write_pos); //Write up to the end of the circular buffer
+        }
 
         /*
          * Get the minimum of different boundaries
@@ -677,11 +695,7 @@ __xen_shm_pipe_write_avail(struct xen_shm_pipe_priv* p, const void* buf, size_t 
         read_pos_reduced = (read_pos_reduced == s->buffer)?(shared_max-1):(read_pos_reduced-1);
         s->write = (uint32_t) (write_pos - s->buffer); //Update read position in shared memory
 
-        if(write_pos <= read_pos_reduced) {
-            circ_max_buf = current_buf + (ptrdiff_t)(read_pos_reduced - write_pos); //Write up to read reduced
-        } else {
-            circ_max_buf = current_buf +  (ptrdiff_t)(shared_max - write_pos); //Write up to the end of the circular buffer
-        }
+
 
     }
 
