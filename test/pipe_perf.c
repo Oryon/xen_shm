@@ -18,6 +18,7 @@ static uint64_t byte_count;
 static xen_shm_pipe_p xpipe;
 static struct timeval start;
 static struct timeval stop;
+static int pipe_used;
 
 
 void usage(void);
@@ -28,6 +29,7 @@ void init_pipe_writer(void);
 void read_pc_and_size(int argc, char **argv);
 void pipe_reader(int argc, char **argv);
 void pipe_writer(int argc, char **argv);
+void pipe_ramwriter(int argc, char **argv);
 
 
 static void
@@ -50,7 +52,7 @@ clean(int sig)
     printf("Byte count : %"PRIu64"\n", byte_count);
     if(byte_count) {
         usec_interval = (uint64_t) ((stop.tv_sec*1000000 + stop.tv_usec) - (start.tv_sec*1000000 + start.tv_usec));
-        seconds = (double) usec_interval;
+        seconds = ((double) usec_interval)/1000000.0;
         bandwidth = ((double) byte_count)/((double) usec_interval); //MBps
         printf("Time lapse : %f seconds\n", seconds);
         printf("Bandwidth  : %f MBps  =   %f Mbps\n", bandwidth, bandwidth*8);
@@ -78,6 +80,7 @@ usage(void)
 {
     printf("Usage: reader <page_count> <buffer_size>\n");
     printf("  OR   writer <page_count> <message_size> <iterations>\n");
+    printf("  OR   ram_writer <message_size> <iterations>\n");
     exit(-1);
 }
 
@@ -171,6 +174,8 @@ void init_pipe_reader(void) {
         exit(-1);
     }
 
+    pipe_used = 1;
+
     if(xen_shm_pipe_getdomid(xpipe, &local_domid)) {
         perror("Pipe get domid");
         clean(0);
@@ -215,7 +220,7 @@ void init_pipe_writer(void) {
         exit(-1);
     }
 
-
+    pipe_used = 1;
 
     printf("Distant domain id: ");
     if((scanf("%"SCNu32, &dist_domid)!=1)) {
@@ -297,16 +302,72 @@ void pipe_writer(int argc, char **argv) {
     pipe_write();
 }
 
+void pipe_ramwriter(int argc, char **argv) {
+    uint8_t* buffer;
+    uint8_t* buffer_2;
+    int i;
+    int j;
+
+    if(argc < 4) {
+        usage();
+    }
+
+    if(sscanf(argv[2], "%"SCNu32, &buffer_size) ) {
+        printf("Size: %"PRIu32"\n", buffer_size);
+    } else {
+        printf("Invalid size\n");
+        usage();
+    }
+
+    if(sscanf(argv[4], "%"SCNu32, &iterations) ) {
+        printf("Iterations: %"PRIu32"\n", iterations);
+    } else {
+        printf("Invalid size\n");
+        usage();
+    }
+
+    if((buffer = malloc(sizeof(uint8_t)*buffer_size))== NULL) {
+        printf("Memory error\n");
+        clean(0);
+    }
+
+    if((buffer_2 = malloc(sizeof(uint8_t)*buffer_size))== NULL) {
+        printf("Memory error\n");
+        clean(0);
+    }
+
+    for(i = 0; i<buffer_size; i++) {
+        buffer[i] = 'u';
+    }
+
+    byte_count = 0;
+    gettimeofday(&start , NULL);
+    for(i=0; i<iterations; i++) {
+        for(j=0; j<buffer_size; j++) {
+            buffer_2[j] = buffer[j];
+        }
+        byte_count+=buffer_size;
+    }
+
+    clean(0);
+
+
+}
+
 
 int main(int argc, char **argv) {
     if(argc < 2) {
         usage();
     }
 
+    pipe_used = 0;
+
     if(strcmp(argv[1], "reader") == 0) {
         pipe_reader(argc, argv);
     } else if(strcmp(argv[1], "writer")==0) {
         pipe_writer(argc, argv);
+    } else if(strcmp(argv[1], "ram_writer")==0) {
+        pipe_ramwriter(argc, argv);
     }
     usage();
     return -1;
