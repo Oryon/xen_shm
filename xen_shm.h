@@ -35,7 +35,7 @@
 
 
 /* The maximum number of aligned pages that can be provided */
-#define XEN_SHM_ALLOC_ALIGNED_PAGES 16
+#define XEN_SHM_ALLOC_ALIGNED_PAGES 128
 
 /* The maximum number of pages the shared-memory module can provide to the user */
 #define XEN_SHM_MAX_SHARED_PAGES (XEN_SHM_ALLOC_ALIGNED_PAGES - 1)
