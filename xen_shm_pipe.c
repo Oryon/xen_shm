@@ -27,6 +27,7 @@
 
 #define XEN_SHM_PIPE_FAST_CHECK_INTERVAL 128 //Will check for the other after the first <value> written or read values (for better delays, it is a small value)
 #define XEN_SHM_PIPE_WAIT_CHECK_PER_ROUND 4 //Minimal number of time the writer/read checks the otherone state while writing/reading
+#define XEN_SHM_PIPE_WAIT_LOOP_LIMIT 10000 //Number of loops a wait can do before performing an ioctl to see if the pipe is broken
 
 /* Different reader/writer flags */
 #define XSHMP_OPENED   0x00000001u
@@ -77,6 +78,7 @@ int __xen_shm_pipe_wait_writer(struct xen_shm_pipe_priv* p);
 int __xen_shm_pipe_wait_reader(struct xen_shm_pipe_priv* p);
 size_t __xen_shm_pipe_read_avail(struct xen_shm_pipe_priv* p, void* buf, size_t nbytes);
 size_t __xen_shm_pipe_write_avail(struct xen_shm_pipe_priv* p, const void* buf, size_t nbytes);
+int __xen_shm_pipe_prone_for_epipe(struct xen_shm_pipe_priv* p);
 
 
 inline int
@@ -141,6 +143,7 @@ xen_shm_pipe_init(xen_shm_pipe_p * xpipe,enum xen_shm_pipe_mod mod,enum xen_shm_
     p->stats.read_count = 0;
     p->stats.write_count = 0;
     p->stats.waiting = 0;
+    p->stats.ioctl_count_epipe_prone = 0;
 #endif
 
     return 0;
@@ -303,6 +306,27 @@ __xen_shm_pipe_wait_signal(struct xen_shm_pipe_priv* p) {
             return ioctl(p->fd, XEN_SHM_IOCTL_AWAIT, &p->await_op);
 }
 
+/* Tests for EPIPE, returns -1 if EPIPE, 0 otherwise */
+int
+__xen_shm_pipe_prone_for_epipe(struct xen_shm_pipe_priv* p) {
+    struct xen_shm_ioctlarg_await await;
+    int retval;
+
+#ifdef XSHMP_STATS
+            p->stats.ioctl_count_epipe_prone++;
+#endif
+    await.request_flags = XEN_SHM_IOCTL_AWAIT_INIT;
+    await.timeout_ms = 1;
+
+    if(ioctl(p->fd, XEN_SHM_IOCTL_AWAIT, &await)<0 && errno == EPIPE)  {
+        return -1;
+    }
+
+    return 0;
+
+}
+
+
 /* Waits for available bytes to read. Return -1 if error. 0 if end of file. 1 if bytes available. */
 int
 __xen_shm_pipe_wait_reader(struct xen_shm_pipe_priv* p) {
@@ -311,6 +335,7 @@ __xen_shm_pipe_wait_reader(struct xen_shm_pipe_priv* p) {
 
     uint32_t writer_flags;
     uint32_t read;
+    uint32_t loop_count;
     int retval;
     int unset_wait;
 
@@ -318,11 +343,13 @@ __xen_shm_pipe_wait_reader(struct xen_shm_pipe_priv* p) {
     sv = p->shared;
 
     unset_wait = 0;
+    loop_count = XEN_SHM_PIPE_WAIT_LOOP_LIMIT;
+
     read = s->read;
     while(read == sv->write) {
 
         writer_flags = sv->writer_flags;
-
+        --loop_count;
         s->reader_flags |= XSHMP_WAITING; //Say we are waiting
         unset_wait = 1;
 
@@ -332,6 +359,14 @@ __xen_shm_pipe_wait_reader(struct xen_shm_pipe_priv* p) {
 
         if(writer_flags & XSHMP_CLOSED) { //File was closed and no bytes remaining
             return 0;
+        }
+
+        if(loop_count==0) {
+            if(__xen_shm_pipe_prone_for_epipe(p)<0) {
+                errno = EPIPE;
+                return -1;
+            }
+            loop_count = XEN_SHM_PIPE_WAIT_LOOP_LIMIT;
         }
 
         if(p->saw_epipe) { //File is not closed but we saw a EPIPE. It's an error.
@@ -381,11 +416,13 @@ __xen_shm_pipe_wait_writer(struct xen_shm_pipe_priv* p) {
     uint32_t write;
     int retval;
     int unset_wait;
+    uint32_t loop_count;
 
     s = p->shared;
     sv = p->shared;
 
     unset_wait = 0;
+    loop_count = XEN_SHM_PIPE_WAIT_LOOP_LIMIT;
 
     if(sv->reader_flags & XSHMP_CLOSED) { //File was closed
         return -1;
@@ -399,6 +436,7 @@ __xen_shm_pipe_wait_writer(struct xen_shm_pipe_priv* p) {
     while(write == sv->read) {
 
         reader_flags = sv->reader_flags;
+        --loop_count;
 
         s->writer_flags |= XSHMP_WAITING; //Say we are waiting
         unset_wait = 1;
@@ -409,6 +447,14 @@ __xen_shm_pipe_wait_writer(struct xen_shm_pipe_priv* p) {
 
         if(reader_flags & XSHMP_CLOSED) { //File was closed
             return -1;
+        }
+
+        if(loop_count==0) {
+            if(__xen_shm_pipe_prone_for_epipe(p)<0) {
+                errno = EPIPE;
+                return -1;
+            }
+            loop_count = XEN_SHM_PIPE_WAIT_LOOP_LIMIT;
         }
 
         if(reader_flags & XSHMP_SLEEPING) { //Other is sleeping, must send a signal

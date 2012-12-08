@@ -24,6 +24,7 @@
 #ifdef XSHMP_STATS
 struct xen_shm_pipe_stats {
     uint64_t ioctl_count_await;
+    uint64_t ioctl_count_epipe_prone;
     uint64_t ioctl_count_ssig;
     uint64_t read_count;
     uint64_t write_count;
