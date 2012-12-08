@@ -305,8 +305,8 @@ void pipe_writer(int argc, char **argv) {
 void pipe_ramwriter(int argc, char **argv) {
     uint8_t* buffer;
     uint8_t* buffer_2;
-    int i;
-    int j;
+    uint32_t i;
+    uint32_t j;
 
     if(argc < 4) {
         usage();
