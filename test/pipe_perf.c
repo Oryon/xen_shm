@@ -49,7 +49,7 @@ clean(int sig)
 
     printf("Byte count : %"PRIu64"\n", byte_count);
     if(byte_count) {
-        usec_interval = (stop.tv_sec*1000000 + stop.tv_usec) - (start.tv_sec*1000000 + start.tv_usec);
+        usec_interval = (uint64_t) ((stop.tv_sec*1000000 + stop.tv_usec) - (start.tv_sec*1000000 + start.tv_usec));
         seconds = (double) usec_interval;
         bandwidth = ((double) byte_count)/((double) usec_interval); //MBps
         printf("Time lapse : %f seconds\n", seconds);
