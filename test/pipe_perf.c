@@ -5,6 +5,7 @@
 #include <string.h>
 #include <signal.h>
 #include <malloc.h>
+#include <sys/time.h>
 
 #include "../xen_shm_pipe.h"
 
@@ -15,6 +16,8 @@ static uint32_t buffer_size;
 static uint32_t iterations;
 static uint64_t byte_count;
 static xen_shm_pipe_p xpipe;
+static struct timeval start;
+static struct timeval stop;
 
 
 void usage(void);
@@ -30,25 +33,38 @@ void pipe_writer(int argc, char **argv);
 static void
 clean(int sig)
 {
+    uint64_t usec_interval;
+    double seconds;
+    double bandwidth;
+
+
 #ifdef XSHMP_STATS
     struct xen_shm_pipe_stats stats;
 #endif
-
+    gettimeofday(&stop , NULL);
     printf("\n");
     if(sig >= 0) {
         printf("Signal received: %i\n", sig);
     }
 
-    printf("Byte count: %"PRIu64"\n", byte_count);
+    printf("Byte count : %"PRIu64"\n", byte_count);
+    if(byte_count) {
+        usec_interval = (stop.tv_sec*1000000 + stop.tv_usec) - (start.tv_sec*1000000 + start.tv_usec);
+        seconds = (double) usec_interval;
+        bandwidth = ((double) byte_count)/((double) usec_interval); //MBps
+        printf("Time lapse : %f seconds\n", seconds);
+        printf("Bandwidth  : %f MBps  =   %f Mbps\n", bandwidth, bandwidth*8);
+    }
 
 #ifdef XSHMP_STATS
     stats = xen_shm_pipe_get_stats(xpipe);
-    printf("Wait calls   : %"PRIu64"\n", stats.ioctl_count_await);
+    printf("\nWait calls   : %"PRIu64"\n", stats.ioctl_count_await);
     printf("Signal calls : %"PRIu64"\n", stats.ioctl_count_ssig);
     printf("Write calls  : %"PRIu64"\n", stats.write_count);
     printf("Read calls   : %"PRIu64"\n", stats.read_count);
     printf("Waiting      : %"PRIu8"\n", stats.waiting);
 #endif
+
 
 
     printf("Now closing the pipe\n");
@@ -79,7 +95,7 @@ void pipe_read(void) {
         printf("Memory error\n");
         clean(0);
     }
-
+    gettimeofday(&start , NULL);
     while((retval = xen_shm_pipe_read_all(xpipe, buffer, buffer_size)) > 0) {
         byte_count += (uint64_t) retval;
 
@@ -118,7 +134,7 @@ void pipe_write(void) {
     for(i = 0; i<buffer_size; i++) {
         buffer[i] = 'u';
     }
-
+    gettimeofday(&start , NULL);
     for(i=0; i<iterations; i++) {
         retval = xen_shm_pipe_write_all(xpipe, buffer, buffer_size);
         if(retval < 0) {
