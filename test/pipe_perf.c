@@ -9,7 +9,7 @@
 
 #include "../xen_shm_pipe.h"
 
-#define SHOW_STATS
+//#define SHOW_STATS
 
 static uint8_t page_count;
 static uint32_t buffer_size;
