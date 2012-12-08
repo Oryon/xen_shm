@@ -33,6 +33,7 @@
 #define XSHMP_CLOSED   0x00000002u
 #define XSHMP_WAITING  0x00000004u
 #define XSHMP_SLEEPING 0x00000008u
+#define XSHMP_ACTIVE   0x00000010u
 
 
 
@@ -343,7 +344,7 @@ __xen_shm_pipe_wait_reader(struct xen_shm_pipe_priv* p) {
             continue;
         }
 
-        if(writer_flags & XSHMP_WAITING) { //Other is waiting, must do an active wait
+        if((writer_flags & XSHMP_ACTIVE) || (writer_flags & XSHMP_WAITING)) { //Other is waiting, must do an active wait
             continue;
         }
 
@@ -415,7 +416,7 @@ __xen_shm_pipe_wait_writer(struct xen_shm_pipe_priv* p) {
             continue;
         }
 
-        if(reader_flags & XSHMP_WAITING) { //Other is waiting, must do an active wait
+        if((reader_flags & XSHMP_ACTIVE) || (reader_flags & XSHMP_WAITING)) { //Other is waiting or active, must do an active wait
             continue;
         }
 
@@ -697,6 +698,7 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
 {
     struct xen_shm_pipe_priv* p;
     int wait_ret;
+    size_t read_ret;
 
     p = xpipe;
 
@@ -718,12 +720,19 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
         return 0;
     }
 
+    p->shared->reader_flags |= XSHMP_ACTIVE;
+
     wait_ret = __xen_shm_pipe_wait_reader(p);
     if(wait_ret <= 0) {
+        p->shared->reader_flags &= ~XSHMP_ACTIVE;
         return (ssize_t) wait_ret;
     }
 
-    return (ssize_t) __xen_shm_pipe_read_avail(p, buf, nbytes);
+    read_ret = __xen_shm_pipe_read_avail(p, buf, nbytes);
+
+    p->shared->reader_flags &= ~XSHMP_ACTIVE;
+
+    return (ssize_t) read_ret;
 }
 
 
@@ -733,6 +742,7 @@ ssize_t
 xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes) {
     struct xen_shm_pipe_priv* p;
     int wait_ret;
+    size_t write_ret;
 
     p = xpipe;
 
@@ -754,12 +764,19 @@ xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes) {
         return -1;
     }
 
+    p->shared->writer_flags |= XSHMP_ACTIVE;
+
     wait_ret = __xen_shm_pipe_wait_writer(p);
     if(wait_ret <= 0) {
+        p->shared->writer_flags &= ~XSHMP_ACTIVE;
         return (ssize_t) wait_ret;
     }
 
-    return (ssize_t) __xen_shm_pipe_write_avail(p, buf, nbytes);
+    write_ret = __xen_shm_pipe_write_avail(p, buf, nbytes);
+
+    p->shared->writer_flags &= ~XSHMP_ACTIVE;
+
+    return (ssize_t) write_ret;
 
 }
 
