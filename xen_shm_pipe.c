@@ -70,6 +70,12 @@ struct xen_shm_pipe_shared {
 inline int __xen_shm_pipe_is_offerer(struct xen_shm_pipe_priv* p);
 int __xen_shm_pipe_map_shared_memory(struct xen_shm_pipe_priv* p, uint8_t page_count);
 uint32_t* __xen_shm_pipe_get_flags(struct xen_shm_pipe_priv* p, int my_flags);
+int __xen_shm_pipe_send_signal(struct xen_shm_pipe_priv* p);
+int __xen_shm_pipe_wait_signal(struct xen_shm_pipe_priv* p);
+int __xen_shm_pipe_wait_writer(struct xen_shm_pipe_priv* p);
+int __xen_shm_pipe_wait_reader(struct xen_shm_pipe_priv* p);
+size_t __xen_shm_pipe_read_avail(struct xen_shm_pipe_priv* p, void* buf, size_t nbytes);
+size_t __xen_shm_pipe_write_avail(struct xen_shm_pipe_priv* p, const void* buf, size_t nbytes);
 
 
 inline int
@@ -717,7 +723,7 @@ xen_shm_pipe_read(xen_shm_pipe_p xpipe, void* buf, size_t nbytes)
         return (ssize_t) wait_ret;
     }
 
-    return __xen_shm_pipe_read_avail(p, buf, nbytes);
+    return (ssize_t) __xen_shm_pipe_read_avail(p, buf, nbytes);
 }
 
 
