@@ -310,7 +310,6 @@ __xen_shm_pipe_wait_signal(struct xen_shm_pipe_priv* p) {
 int
 __xen_shm_pipe_prone_for_epipe(struct xen_shm_pipe_priv* p) {
     struct xen_shm_ioctlarg_await await;
-    int retval;
 
 #ifdef XSHMP_STATS
             p->stats.ioctl_count_epipe_prone++;
