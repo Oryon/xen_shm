@@ -346,9 +346,10 @@ void pipe_ramwriter(int argc, char **argv) {
     byte_count = 0;
     gettimeofday(&start , NULL);
     for(i=0; i<iterations; i++) {
-        for(j=0; j<aligned_iter ; j+=8) {
-            *((uint64_t*) (&buffer[j])) = *((uint64_t*) (&buffer_2[j]));
+        for(j=0; j<aligned_iter ; j++) {
+            *((uint64_t*) (&buffer[8*j])) = *((uint64_t*) (&buffer_2[8*j]));
         }
+        j = j*8;
         for(; j<buffer_size; j++) {
             buffer_2[j] = buffer[j];
         }
