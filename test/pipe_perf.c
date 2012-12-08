@@ -307,6 +307,7 @@ void pipe_ramwriter(int argc, char **argv) {
     uint8_t* buffer_2;
     uint32_t i;
     uint32_t j;
+    uint32_t aligned_iter;
 
     if(argc < 4) {
         usage();
@@ -319,7 +320,7 @@ void pipe_ramwriter(int argc, char **argv) {
         usage();
     }
 
-    if(sscanf(argv[4], "%"SCNu32, &iterations) ) {
+    if(sscanf(argv[3], "%"SCNu32, &iterations) ) {
         printf("Iterations: %"PRIu32"\n", iterations);
     } else {
         printf("Invalid size\n");
@@ -340,10 +341,15 @@ void pipe_ramwriter(int argc, char **argv) {
         buffer[i] = 'u';
     }
 
+    aligned_iter = buffer_size/8;
+
     byte_count = 0;
     gettimeofday(&start , NULL);
     for(i=0; i<iterations; i++) {
-        for(j=0; j<buffer_size; j++) {
+        for(j=0; j<aligned_iter ; j+=8) {
+            *((uint64_t*) (&buffer[j])) = *((uint64_t*) (&buffer_2[j]));
+        }
+        for(; j<buffer_size; j++) {
             buffer_2[j] = buffer[j];
         }
         byte_count+=buffer_size;
