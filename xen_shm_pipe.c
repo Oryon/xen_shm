@@ -754,7 +754,7 @@ xen_shm_pipe_write(xen_shm_pipe_p xpipe, const void* buf, size_t nbytes) {
         return -1;
     }
 
-    wait_ret = __xen_shm_pipe_wait_reader(p);
+    wait_ret = __xen_shm_pipe_wait_writer(p);
     if(wait_ret <= 0) {
         return (ssize_t) wait_ret;
     }
