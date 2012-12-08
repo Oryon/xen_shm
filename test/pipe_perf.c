@@ -65,6 +65,7 @@ clean(int sig)
     printf("Write calls  : %"PRIu64"\n", stats.write_count);
     printf("Read calls   : %"PRIu64"\n", stats.read_count);
     printf("Waiting      : %"PRIu8"\n", stats.waiting);
+    printf("Epipe Prone  : %"PRIu8"\n", stats.ioctl_count_epipe_prone);
 #endif
 
 
