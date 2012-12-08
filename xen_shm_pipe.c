@@ -442,6 +442,9 @@ __xen_shm_pipe_read_avail(struct xen_shm_pipe_priv* p, void* buf, size_t nbytes)
     struct xen_shm_pipe_shared* s;
     volatile struct xen_shm_pipe_shared* sv;
 
+    uint8_t is_aligned;
+    uint8_t gran_check;
+
     uint8_t* user_buf; //A cast of the given user buffer
 
     uint8_t* read_pos; //Read pointer in circular buffer
@@ -480,6 +483,8 @@ __xen_shm_pipe_read_avail(struct xen_shm_pipe_priv* p, void* buf, size_t nbytes)
     circ_max_buf = user_buf;
     min_max_buf = user_buf;
 
+    is_aligned = 0;
+
     while(read_pos != write_pos && current_buf != usr_max_buf) //We read as much as we can
     {
 
@@ -493,10 +498,12 @@ __xen_shm_pipe_read_avail(struct xen_shm_pipe_priv* p, void* buf, size_t nbytes)
          * Get the minimum of different boundaries
          */
         min_max_buf = circ_max_buf;
+        gran_check = 0;
         if(min_max_buf > usr_max_buf) {
             min_max_buf = usr_max_buf;
         }
         if(min_max_buf > gran_max_buf) {
+            gran_check = 1;
             min_max_buf = gran_max_buf;
         }
 
@@ -504,14 +511,18 @@ __xen_shm_pipe_read_avail(struct xen_shm_pipe_priv* p, void* buf, size_t nbytes)
          * Actually read
          */
         //Tests 64b alignement
-        if( (((unsigned long) current_buf) & ((unsigned long) 0x7u)) == (((unsigned long)read_pos) & ((unsigned long) 0x7u))
+        if( (is_aligned || (((unsigned long) current_buf) & ((unsigned long) 0x7u)) == (((unsigned long)read_pos) & ((unsigned long) 0x7u)) )
                 && min_max_buf - current_buf > 24) {
             //Align optimized
-            while( ((unsigned long) current_buf) & ((unsigned long) 0x7u)) { //Slow copy to align with 64b pointers
-                *current_buf = *read_pos;
-                ++current_buf;
-                ++read_pos;
+            if(!is_aligned) {
+                is_aligned = 1;
+                while( ((unsigned long) current_buf) & ((unsigned long) 0x7u)) { //Slow copy to align with 64b pointers
+                    *current_buf = *read_pos;
+                    ++current_buf;
+                    ++read_pos;
+                }
             }
+
 
             min_max_buf64 = (uint64_t*)( ((unsigned long)min_max_buf) & ~((unsigned long) 0x7u)  );
             current_buf64 = (uint64_t*)(current_buf);
@@ -525,14 +536,18 @@ __xen_shm_pipe_read_avail(struct xen_shm_pipe_priv* p, void* buf, size_t nbytes)
             read_pos = (uint8_t*)(read_pos64);
 
             //Ending the copy
-            while(current_buf != min_max_buf) {
-                *current_buf = *read_pos;
-                ++current_buf;
-                ++read_pos;
+            if((!gran_check) && (current_buf != min_max_buf)) {
+                is_aligned = 0;
+                while(current_buf != min_max_buf) {
+                    *current_buf = *read_pos;
+                    ++current_buf;
+                    ++read_pos;
+                }
             }
 
         } else {
             //Slow speed
+            is_aligned = 0;
             while(current_buf != min_max_buf) {
                 *current_buf = *read_pos;
                 ++current_buf;
@@ -544,7 +559,7 @@ __xen_shm_pipe_read_avail(struct xen_shm_pipe_priv* p, void* buf, size_t nbytes)
         /*
          * Check boundary values
          */
-        if(current_buf == gran_max_buf) { //Time to take news of the other guy
+        if(gran_check || (current_buf == gran_max_buf)) { //Time to take news of the other guy
             if(sv->writer_flags & XSHMP_SLEEPING) { //Writer is waiting
                 __xen_shm_pipe_send_signal(p);
             }
@@ -576,6 +591,9 @@ size_t
 __xen_shm_pipe_write_avail(struct xen_shm_pipe_priv* p, const void* buf, size_t nbytes) {
     struct xen_shm_pipe_shared* s;
     volatile struct xen_shm_pipe_shared* sv;
+
+    uint8_t is_aligned;
+    uint8_t gran_check;
 
     uint8_t* read_pos_reduced; //Read pointer - 1 in circular buffer
     uint8_t* write_pos;//Write pointer in circ buff
@@ -616,6 +634,8 @@ __xen_shm_pipe_write_avail(struct xen_shm_pipe_priv* p, const void* buf, size_t 
     circ_max_buf = user_buf;
     min_max_buf = user_buf;
 
+    is_aligned = 0;
+
     while(write_pos != read_pos_reduced && current_buf != usr_max_buf) //We write as much as we can
     {
 
@@ -628,11 +648,13 @@ __xen_shm_pipe_write_avail(struct xen_shm_pipe_priv* p, const void* buf, size_t 
         /*
          * Get the minimum of different boundaries
          */
+        gran_check = 0;
         min_max_buf = circ_max_buf;
         if(min_max_buf > usr_max_buf) {
             min_max_buf = usr_max_buf;
         }
         if(min_max_buf > gran_max_buf) {
+            gran_check = 1;
             min_max_buf = gran_max_buf;
         }
 
@@ -641,14 +663,18 @@ __xen_shm_pipe_write_avail(struct xen_shm_pipe_priv* p, const void* buf, size_t 
          */
 
         //Tests 64b alignement
-        if(  (((unsigned long) current_buf) & ((unsigned long) 0x7u)) == (((unsigned long) write_pos) & ((unsigned long) 0x7u))
+        if( (is_aligned || (((unsigned long) current_buf) & ((unsigned long) 0x7u)) == (((unsigned long) write_pos) & ((unsigned long) 0x7u)))
                 && min_max_buf - current_buf > 24  ) {
             //Align optimized
-            while( ((unsigned long) current_buf) & ((unsigned long) 0x7u)) { //Slow copy to align with 64b pointers
-                *write_pos = *current_buf;
-                ++current_buf;
-                ++write_pos;
+            if(!is_aligned) {
+                is_aligned = 1;
+                while( ((unsigned long) current_buf) & ((unsigned long) 0x7u)) { //Slow copy to align with 64b pointers
+                    *write_pos = *current_buf;
+                    ++current_buf;
+                    ++write_pos;
+                }
             }
+
 
             min_max_buf64 = (uint64_t*)( ((unsigned long) min_max_buf) & ~((unsigned long) 0x7u)); //Previous aligned
             current_buf64 = (const uint64_t*)(current_buf);
@@ -662,14 +688,18 @@ __xen_shm_pipe_write_avail(struct xen_shm_pipe_priv* p, const void* buf, size_t 
             write_pos = (uint8_t*)(write_pos64);
 
             //Ending the copy
-            while(current_buf != min_max_buf) {
-                *write_pos = *current_buf;
-                ++current_buf;
-                ++write_pos;
+            if((!gran_check) && (current_buf != min_max_buf)) {
+                is_aligned = 0;
+                while(current_buf != min_max_buf) {
+                    *write_pos = *current_buf;
+                    ++current_buf;
+                    ++write_pos;
+                }
             }
 
         } else {
             //Slow speed
+            is_aligned = 0;
             while(current_buf != min_max_buf) {
                 *write_pos = *current_buf;
                 ++current_buf;
@@ -680,7 +710,7 @@ __xen_shm_pipe_write_avail(struct xen_shm_pipe_priv* p, const void* buf, size_t 
         /*
          * Check boundary values
          */
-        if(current_buf == gran_max_buf) { //Time to take news of the other guy
+        if(gran_check || (current_buf == gran_max_buf)) { //Time to take news of the other guy
             if(sv->reader_flags & XSHMP_SLEEPING) { //Reader is waiting
                 __xen_shm_pipe_send_signal(p);
             }
