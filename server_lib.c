@@ -19,7 +19,7 @@ struct pthread_list {
 struct opening_list {
     in_port_t distant_port;
     struct in_addr distant_addr;
-    xen_shm_pipe_p send_fd;
+    xen_shm_pipe_p receive_fd;
     struct opening_list *next;
 };
 
@@ -128,28 +128,34 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
         }
         switch(header->message) {
             case XEN_SHM_UDP_PROTO_CLIENT_HELLO:
+                if ((size_t)len < sizeof(struct xen_shm_udp_proto_client_hello)) {
+                    printf("Packet too short !\n");
+                    return;
+                }
                 client_hello = (struct xen_shm_udp_proto_client_hello*) buffer;
                 o_new = calloc(1, sizeof(struct opening_list));
                 if (o_new == NULL) {
                     printf("Calloc error !\n");
                     return;
                 }
-                ret = xen_shm_pipe_init(&o_new->send_fd, xen_shm_pipe_mod_write, xen_shm_pipe_conv_writer_offers);
+                ret = xen_shm_pipe_init(&o_new->receive_fd, xen_shm_pipe_mod_read, xen_shm_pipe_conv_reader_offers);
                 if (ret == 0) {
                     printf("Unable to init xen_shm_pipe\n");
+                    perror("xen_shm_pipe_init");
                     goto server_reset;
                 }
                 grant = (struct xen_shm_udp_proto_grant*)buffer;
-                ret = xen_shm_pipe_offers(o_new->send_fd, data->proposed_page_page_count, client_hello->domid, &grant->domid, &grant->grant_ref);
+                ret = xen_shm_pipe_offers(o_new->receive_fd, data->proposed_page_page_count, client_hello->domid, &grant->domid, &grant->grant_ref);
                 if (ret == 0) {
                     printf("Unable to init xen_shm_pipe in offerer mode \n");
-                    xen_shm_pipe_free(o_new->send_fd);
+                    perror("xen_shm_pipe_offers");
+                    xen_shm_pipe_free(o_new->receive_fd);
                     goto server_reset;
                 }
                 o_new->distant_port = source.sin_port;
                 memcpy(&o_new->distant_addr, (struct sockaddr *) &source, addr_len);
                 grant->header.message = XEN_SHM_UDP_PROTO_SERVER_GRANT;
-                grant->mode = XEN_SHM_UDP_PROTO_GRANT_MODE_WRITER_OFFERER;
+                grant->mode = XEN_SHM_UDP_PROTO_GRANT_MODE_READER_OFFERER;
                 grant->page_count = data->proposed_page_page_count;
                 send_len = sizeof(struct xen_shm_udp_proto_grant);
                 o_new->next = data->current;
@@ -171,6 +177,10 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
                 if (o_new == NULL) {
                     goto server_reset;
                 }
+                if ((size_t)len < sizeof(struct xen_shm_udp_proto_grant)) {
+                    printf("Packet too short !\n");
+                    goto free_o_new;
+                }
                 grant = (struct xen_shm_udp_proto_grant*)buffer;
                 client_data = calloc(1, sizeof(struct xen_shm_server_data));
                 if (client_data == NULL) {
@@ -180,21 +190,26 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
                 c_new = calloc(1, sizeof(struct pthread_list));
                 if (c_new == NULL) {
                     printf("Calloc error !\n");
-                    free(client_data);
-                    goto free_o_new;
+                    goto free_data;
                 }
-                ret = xen_shm_pipe_init(&client_data->receive_fd, xen_shm_pipe_mod_read, xen_shm_pipe_conv_writer_offers);
+                if (grant->mode != XEN_SHM_UDP_PROTO_GRANT_MODE_READER_OFFERER) {
+                    printf("Unsupported mode !\n");
+                    goto free_data;
+                }
+                ret = xen_shm_pipe_init(&client_data->send_fd, xen_shm_pipe_mod_write, xen_shm_pipe_conv_reader_offers);
                 if (ret == 0) {
                     printf("Unable to init xen_shm_pipe\n");
-                    goto free_o_new;
+                    perror("xen_shm_pipe_init");
+                    goto free_data;
                 }
-                ret = xen_shm_pipe_connect(client_data->receive_fd, grant->page_count, grant->domid, grant->grant_ref);
+                ret = xen_shm_pipe_connect(client_data->send_fd, grant->page_count, grant->domid, grant->grant_ref);
                 if (ret == 0) {
                     printf("Unable to init xen_shm_receiver\n");
-                    xen_shm_pipe_free(client_data->receive_fd);
-                    goto free_o_new;
+                    perror("xen_shm_pipe_connect");
+                    xen_shm_pipe_free(client_data->send_fd);
+                    goto free_data;
                 }
-                client_data->send_fd = o_new->send_fd;
+                client_data->receive_fd = o_new->receive_fd;
                 client_data->private_data = data->private_data;
                 ret = pthread_create(&c_new->child, /* Default attr */ NULL, (void * (*)(void *))data->initializer, client_data);
                 if (ret != 0) {
@@ -215,8 +230,11 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
     }
     return;
 
+free_data:
+    free(client_data);
+
 free_o_new:
-    xen_shm_pipe_free(o_new);
+    xen_shm_pipe_free(o_new->receive_fd);
     free_opening(data, o_new);
 
 server_reset:
@@ -298,8 +316,8 @@ run_server(int port, uint8_t proposed_page_page_count, listener_init initializer
     /* Close the currently half-opened connections */
     o_it = data->current;
     while (o_it != NULL) {
-        if (o_it->send_fd != NULL) {
-            xen_shm_pipe_free(o_it->send_fd);
+        if (o_it->receive_fd != NULL) {
+            xen_shm_pipe_free(o_it->receive_fd);
         }
         o_next = o_it->next;
         free(o_it);
