@@ -57,6 +57,7 @@ find_opening(struct internal_data *data, struct sockaddr_in *source)
             && (memcmp(&source->sin_addr, &temp->distant_addr, sizeof(struct in_addr)) == 0)) {
             break;
         }
+        temp = temp->next;
     }
     return temp;
 }
@@ -75,6 +76,7 @@ free_opening(struct internal_data *data, struct opening_list* o)
             temp->next = o->next;
             break;
         }
+        temp = temp->next;
     }
 
     free(o);
@@ -100,6 +102,7 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
 
     data = w->data;
     send_len = 0;
+    addr_len = sizeof(struct sockaddr_in);
 
     if (revents & (int)EV_ERROR) {
         printf("UDP error\n");
@@ -139,21 +142,21 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
                     return;
                 }
                 ret = xen_shm_pipe_init(&o_new->receive_fd, xen_shm_pipe_mod_read, xen_shm_pipe_conv_reader_offers);
-                if (ret == 0) {
+                if (ret != 0) {
                     printf("Unable to init xen_shm_pipe\n");
                     perror("xen_shm_pipe_init");
                     goto server_reset;
                 }
                 grant = (struct xen_shm_udp_proto_grant*)buffer;
                 ret = xen_shm_pipe_offers(o_new->receive_fd, data->proposed_page_page_count, client_hello->domid, &grant->domid, &grant->grant_ref);
-                if (ret == 0) {
+                if (ret != 0) {
                     printf("Unable to init xen_shm_pipe in offerer mode \n");
                     perror("xen_shm_pipe_offers");
                     xen_shm_pipe_free(o_new->receive_fd);
                     goto server_reset;
                 }
                 o_new->distant_port = source.sin_port;
-                memcpy(&o_new->distant_addr, (struct sockaddr *) &source, addr_len);
+                memcpy(&o_new->distant_addr, (struct in_addr*) &source.sin_addr, sizeof(struct in_addr));
                 grant->header.message = XEN_SHM_UDP_PROTO_SERVER_GRANT;
                 grant->mode = XEN_SHM_UDP_PROTO_GRANT_MODE_READER_OFFERER;
                 grant->page_count = data->proposed_page_page_count;
@@ -197,13 +200,13 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
                     goto free_data;
                 }
                 ret = xen_shm_pipe_init(&client_data->send_fd, xen_shm_pipe_mod_write, xen_shm_pipe_conv_reader_offers);
-                if (ret == 0) {
+                if (ret != 0) {
                     printf("Unable to init xen_shm_pipe\n");
                     perror("xen_shm_pipe_init");
                     goto free_data;
                 }
                 ret = xen_shm_pipe_connect(client_data->send_fd, grant->page_count, grant->domid, grant->grant_ref);
-                if (ret == 0) {
+                if (ret != 0) {
                     printf("Unable to init xen_shm_receiver\n");
                     perror("xen_shm_pipe_connect");
                     xen_shm_pipe_free(client_data->send_fd);

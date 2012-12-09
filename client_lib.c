@@ -135,19 +135,19 @@ init_pipe(in_port_t distant_port, struct in_addr *distant_addr, xen_shm_pipe_p *
         goto cancel_server;
     }
 
-    if ((size_t)len != sizeof(struct xen_shm_udp_proto_client_hello)) {
+    if ((size_t)len != sizeof(struct xen_shm_udp_proto_grant)) {
         printf("Unable to send message (bad size=\n");
         perror("sendto");
         goto cancel_server;
     }
 
-    return_value = 0;
+    shutdown(client_fd, SHUT_RDWR);
+    return 0;
+
 
 cancel_server:
-    if (return_value < 0) {
-        header->message = XEN_SHM_UDP_PROTO_CLIENT_RESET;
-        sendto(client_fd, buffer, sizeof(struct xen_shm_udp_proto_header), /* No flag */ 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in));
-    }
+    header->message = XEN_SHM_UDP_PROTO_CLIENT_RESET;
+    sendto(client_fd, buffer, sizeof(struct xen_shm_udp_proto_header), /* No flag */ 0, (struct sockaddr *) &addr, sizeof(struct sockaddr_in));
 
 clean_send_fd:
     xen_shm_pipe_free(*send_fd);
