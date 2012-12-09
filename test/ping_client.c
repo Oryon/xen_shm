@@ -61,7 +61,7 @@ main(int argc, char *argv[])
         return -1;
     }
 
-    retval = init_pipe(port, addr, receive_fd, send_fd, page_count);
+    retval = init_pipe(port, addr, &receive_fd, &send_fd, page_count);
     if (retval != 0) {
         printf("Unable to init pipe\n");
         return -1;
