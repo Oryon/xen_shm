@@ -19,7 +19,7 @@
 
 
 /*
- * Headers for file system implementation
+ * The headers the module use
  */
 #include <asm/atomic.h>
 #include <asm/page.h>
@@ -84,7 +84,8 @@
 
 
 /*
- * Options : try to free delayed data on close/open ?
+ * The delayed closure mechanism needs regular tentative to destroy remaining grant entries.
+ * Here are the macros that specify when it should be done.
  */
 
 #ifndef DELAYED_FREE_ON_CLOSE
@@ -104,21 +105,21 @@
 enum xen_shm_state_t {
     XEN_SHM_STATE_OPENED,         /* Freshly opened device, can move to offerer or receiver */
     XEN_SHM_STATE_OFFERER,        /* Memory is allocated. Event pipe created. */
-    XEN_SHM_STATE_RECEIVER,       /* Memory is allocated and only_first page mapped. Pipe is connected. */
-    XEN_SHM_STATE_RECEIVER_MAPPED /* Memory is allocated and fully mapped. Pipe is connected. */
+    XEN_SHM_STATE_RECEIVER,       /* The first shared page (header page) is mapped. Pipe is connected. */
+    XEN_SHM_STATE_RECEIVER_MAPPED /* First page is mapped in the kernel, other pages in the userspace. Pipe is connected. */
 };
 
-/* Page state */
+/* Both sides maintain a state in the shared page. It is used for termination. */
 typedef uint8_t xen_shm_meta_page_state;
 #define XEN_SHM_META_PAGE_STATE_NONE    0x01 //The peer didn't do anything
 #define XEN_SHM_META_PAGE_STATE_OPENED  0x02 //The peer is using the pages
-#define XEN_SHM_META_PAGE_STATE_CLOSED  0x03 //Receiver: Page is going to be unmapped -- Offerer: The receiver must close asap
+#define XEN_SHM_META_PAGE_STATE_CLOSED  0x03 //Receiver: Pages are unmapped -- Offerer: The receiver must close asap
 
 
 /*
  * Defines the instance information.
- * They are stored in the private data field of 'struct file' and will maybe
- * have to be kept in order to "close later" in the case of a blocking offerer close.
+ * They are stored in the private data field of 'struct file'
+ * It can also be stored in the delayed free queue in order to be "closed later"
  */
 struct xen_shm_instance_data {
     enum xen_shm_state_t state; //The state of this instance
@@ -128,7 +129,7 @@ struct xen_shm_instance_data {
 
     /* Pages info */
     uint8_t pages_count;               //The total number of consecutive allocated pages (with the header page)
-    unsigned long shared_memory;       //The kernel addresses of the allocated pages on the offerrer
+    unsigned long shared_memory;       //Offerer only: The kernel addresses of the allocated pages
 
     /* Xen domids */
     domid_t local_domid;    //The local domain id
@@ -136,17 +137,17 @@ struct xen_shm_instance_data {
 
 
     /* Event channel data */
-    evtchn_port_t local_ec_port; //The allocated event port number
-    evtchn_port_t dist_ec_port; //Receiver only: The allocated event port number
+    evtchn_port_t local_ec_port; //The allocated local event port number
+    evtchn_port_t dist_ec_port; //Receiver only: The distant event port number
 
     /* Delayed memory next element */
-    struct xen_shm_instance_data* next_delayed;
+    struct xen_shm_instance_data* next_delayed; //Used in the delayed_free queue (so after closure) to provide a linked list structure
 
     /* Wait queue for the event channel */
-    wait_queue_head_t wait_queue;
-    unsigned int ec_irq;
-    uint8_t initial_signal;
-    uint8_t user_signal;
+    wait_queue_head_t wait_queue; //The wait queue used to make some process wait
+    unsigned int ec_irq;          //The event channel irq
+    uint8_t initial_signal;       //0 before the initial signal has been received, 1 after
+    uint8_t user_signal;          //0 when a process is waiting, the handler sets it to one and wakes-up the queue
 
     /* State depend variables */
     /* Both */
@@ -170,24 +171,27 @@ struct xen_shm_instance_data {
 };
 
 /*
- * The first page is used to share meta-data in a more efficient way
+ * The first page is used to share meta-data
+ * This is the used structure
  */
 struct xen_shm_meta_page_data {
 
-    xen_shm_meta_page_state offerer_state;
-    xen_shm_meta_page_state receiver_state;
+    xen_shm_meta_page_state offerer_state;  //The state of the offerer
+    xen_shm_meta_page_state receiver_state; //The state of the receiver
 
-    uint8_t pages_count; //The number of shared pages, with the header-page. The offerer writes it and the receiver must check it agrees with what he wants
+    /* The number of shared pages (with the header-page).
+     * The offerer writes it and the receiver must check if he agrees */
+    uint8_t pages_count;
 
     /*
-     * Informations about the event channel
+     * Information about the event channel
      */
-    evtchn_port_t offerer_ec_port; //Offerer's event channel port
-    atomic_t ec_mutex_count;
+    evtchn_port_t offerer_ec_port;  //Offerer's event channel port
+    atomic_t ec_mutex_count;        //An atomic value used by the mutex wait feature
 
     /*
      * An array containing 'pages_count' grant referances.
-     * The first needs to be sent to the receiver, but they are all written here.
+     * The first grant ref. must be sent to the receiver, but they are all written here.
      */
     grant_ref_t grant_refs[XEN_SHM_ALLOC_ALIGNED_PAGES];
 
@@ -461,7 +465,7 @@ __xen_shm_free_shared_memory_receiver(struct xen_shm_instance_data* data)
 
 
 /*
- * Is called when a free cannot be done imidiatly. The data must be put in some queue and deleted later.
+ * Is called when a free cannot be done imidiatly. The data must be put in a queue and deleted later.
  */
 static void
 __xen_shm_add_delayed_free(struct xen_shm_instance_data* data)
@@ -1074,10 +1078,6 @@ xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         case XEN_SHM_IOCTL_INIT_OFFERER:
             /*
              * Used to make the state go from OPENED to OFFERER.
-             *
-             * Note the first allocated page is used to transfer the event channel port.
-             * When multiple pages are alocated, the first page is also used to transfer
-             * the grant_ref_t array.
              */
             retval = copy_from_user(&offerer_karg, arg_p, sizeof(struct xen_shm_ioctlarg_offerer)); //Copying from userspace
             if (retval != 0)
@@ -1113,7 +1113,7 @@ xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         case XEN_SHM_IOCTL_WAIT:
 
             /*
-             * Waits until a signal is received through the signal channel
+             * Waits until a signal is received through the event channel
              */
             await_karg.remaining_ms = 0;
             await_karg.request_flags = XEN_SHM_IOCTL_AWAIT_INIT | XEN_SHM_IOCTL_AWAIT_USER;
@@ -1122,6 +1122,9 @@ xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
             break;
         case XEN_SHM_IOCTL_AWAIT:
+            /*
+             * This ioctl offers more waiting features such as timeout, user signal wait, init signal wait and mutex wait.
+             */
             retval = copy_from_user(&await_karg, arg_p, sizeof(struct xen_shm_ioctlarg_await)); //Copying from userspace
             if (retval != 0)
                 return -EFAULT;
@@ -1145,7 +1148,7 @@ xen_shm_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
             break;
         case XEN_SHM_IOCTL_GET_DOMID:
             /*
-             * Writes the domain id into the structure
+             * Writes the local domain id into the structure
              */
             getdomid_karg.local_domid = instance_data->local_domid; //Get the local_dom_id from the file data
 
@@ -1315,12 +1318,10 @@ xen_shm_release(struct inode * inode, struct file * filp)
     /*
      * Warning: Remember the OFFERER grants and ungrant the pages.
      *          The RECEIVER map and unmap the pages.
-     *          BUT the OFFERER -must not- ungrant the pages before the RECEIVER unmaped them.
      *
-     *          Xen functions to ungrant can be used when someone still map them, but the memory (obtained with kmalloc) cannot
-     *          be freed because a new allocation of the same physical adresses would create troubles.
-     *          void gnttab_end_foreign_access(grant_ref_t ref, int readonly, unsigned long page); maybe solve the problem ? --> Not implemented yet !?!!! (see sources)
-     *            Maybe we should use the first page for information purposes ? (like using a value to know if the kmalloc can be freed)
+     *          Xen functions to ungrant can be used when someone still map them, but the memory cannot
+     *          be freed because a new allocation of the same physical addresses would create troubles.
+     *
      */
 
 #if DELAYED_FREE_ON_CLOSE

@@ -6,12 +6,12 @@
  *
  * This file contains the public headers of the Xen
  * shared memory module. It provides the user-space all
- * the needed structures and values to use to xen_shm
+ * the needed structures and values to use with the xen_shm
  * device.
  *
  * This module gives the users of virtual machine over
  * a Xen Hypervisor a way to share pages of memory with
- * some other program on a possibly different virtual
+ * some other user on possibly different virtual
  * machine.
  * It also provides waiting and notifying mechanisms
  * between the two processes.
@@ -29,29 +29,33 @@
 #include <xen/grant_table.h>
 
 
-/*
- * General configuration
- */
+/********************************/
+/* General module configuration */
+/********************************/
 
-
-/* The maximum number of aligned pages that can be provided */
+/* The maximum number of aligned pages that can be allocated inside the kernel */
 #define XEN_SHM_ALLOC_ALIGNED_PAGES 128
-
-/* The maximum number of pages the shared-memory module can provide to the user */
-#define XEN_SHM_MAX_SHARED_PAGES (XEN_SHM_ALLOC_ALIGNED_PAGES - 1)
 
 /* The device major number - 0 for automatic allocation */
 #define XEN_SHM_MAJOR_NUMBER 0
+
+#define XEN_SHM_MAGIC_NUMBER 83 // 8 bit int
+
+
+/********************************/
+/* Interface with the userspace */
+/********************************/
+
+
+/* The maximum number of pages the shared-memory module can provide to the user */
+#define XEN_SHM_MAX_SHARED_PAGES (XEN_SHM_ALLOC_ALIGNED_PAGES - 1)
 
 #define XEN_SHM_DEVICE_PATH "/dev/xen_shm"
 
 /*
  * IOCTL's command numbers and structures
- * A Magic number is defined and used. Using those Macros reduces the probability
- * of collisions and provides information to check the user's argument pointer
  */
 
-#define XEN_SHM_MAGIC_NUMBER 83 // 8 bit int
 
 /*
  * Init the shared memory as the offerer domain
@@ -59,23 +63,23 @@
 #define XEN_SHM_IOCTL_INIT_OFFERER    _IOWR(XEN_SHM_MAGIC_NUMBER, 1, struct xen_shm_ioctlarg_offerer )
 struct xen_shm_ioctlarg_offerer {
     /* In arguments */
-    uint8_t pages_count;
-    domid_t dist_domid;
+    uint8_t pages_count; //Number of pages to share in the userspace
+    domid_t dist_domid;  //The distant domain id, provided by the receiver
 
     /* Out arguments */
-    grant_ref_t grant;
-    domid_t local_domid;
+    grant_ref_t grant;   //A grant ref. Must be given to the receiver.
+    domid_t local_domid; //The local domain id. Must also be given to the receiver.
 };
 
 /*
  * Init the shared memory as the receiver domain
  */
-#define XEN_SHM_IOCTL_INIT_RECEIVER   _IOWR(XEN_SHM_MAGIC_NUMBER, 2, struct xen_shm_ioctlarg_receiver )
+#define XEN_SHM_IOCTL_INIT_RECEIVER   _IOW(XEN_SHM_MAGIC_NUMBER, 2, struct xen_shm_ioctlarg_receiver )
 struct xen_shm_ioctlarg_receiver {
     /* In arguments */
-    uint8_t pages_count;
-    domid_t dist_domid;
-    grant_ref_t grant;
+    uint8_t pages_count; //Number of pages to share in the userspace
+    domid_t dist_domid;  //The distant domain id, provided by the offerer
+    grant_ref_t grant;   //The grant reference, provided by the offerer
 
     /* Out arguments */
 
@@ -83,7 +87,10 @@ struct xen_shm_ioctlarg_receiver {
 
 /*
  * Blocks until a signal is received through the event channel
- * Argument is ignored
+ * Returns -ERESTARTSYS if a signal interrupted the wait.
+ *         -ENOTTY if the memory has not been initialized
+ *         -EPIPE if the memory has been closed on one side
+ *         0 otherwise
  */
 #define XEN_SHM_IOCTL_WAIT            _IO(XEN_SHM_MAGIC_NUMBER, 3)
 
@@ -93,16 +100,17 @@ struct xen_shm_ioctlarg_receiver {
  * Returns -ERESTARTSYS if a signal interrupted the wait.
  *         -ENOTTY if the memory has not been initialized
  *         -EPIPE if the memory has been closed on one side
+ *         -EDEADLK if the mutex flag is set and the other process is already waiting with the mutex flag set
  *         0 otherwise
  */
 #define XEN_SHM_IOCTL_AWAIT           _IOWR(XEN_SHM_MAGIC_NUMBER, 4, struct xen_shm_ioctlarg_await )
 struct xen_shm_ioctlarg_await {
     /* In arguments */
-    uint8_t request_flags;     //Indicate what events to wait for (0 means you wait untill the memory is closed)
-    unsigned long timeout_ms;  //Timeout in ms (0 for no timeout)
+    uint8_t request_flags;      //Indicate what events to wait for (0 means you wait until the memory is closed)
+    unsigned long timeout_ms;   //Timeout in ms (0 for no timeout) /!\ Jiffies are used, so the precision is bad (typically some ms)
 
     /* Out arguments */
-    unsigned long remaining_ms;//Zero if the timeout has reached its end. Remaining time otherwise.
+    unsigned long remaining_ms; //Zero if the timeout has reached its end. Approximate remaining time otherwise.
 };
 /* Waits for a userspace signal. */
 #define XEN_SHM_IOCTL_AWAIT_USER 0x01
