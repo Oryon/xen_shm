@@ -260,13 +260,13 @@ run_server(int port, uint8_t proposed_page_page_count, listener_init initializer
     int server_fd;
 
     event_killer = calloc(1, sizeof(struct ev_timer));
-    if (event_killer != NULL) {
+    if (event_killer == NULL) {
         printf("Arg, no memory !\n");
         return -1;
     }
 
     event = calloc(1, sizeof(struct ev_io));
-    if (event != NULL) {
+    if (event == NULL) {
         printf("Arg, no memory !\n");
         free(event_killer);
         return -1;
@@ -305,6 +305,7 @@ run_server(int port, uint8_t proposed_page_page_count, listener_init initializer
 
     ev_io_init(event, udp_readable_cb, server_fd, EV_READ);
     event->data = data;
+    event_loop = ev_default_loop (EVFLAG_AUTO);
     ev_io_start(event_loop, event);
 
     ev_init(event_killer, event_end);
