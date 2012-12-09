@@ -19,9 +19,19 @@
 
 #include <inttypes.h>
 
+
+/*
+ * Enables statistics to be gathered during the transfert
+ */
 #define XSHMP_STATS
 
+
+
 #ifdef XSHMP_STATS
+
+/*
+ * The statistics that are gathered
+ */
 struct xen_shm_pipe_stats {
     uint64_t ioctl_count_await;
     uint64_t ioctl_count_epipe_prone;
@@ -40,7 +50,7 @@ struct xen_shm_pipe_stats {
 typedef void* xen_shm_pipe_p;
 
 /*
- * The pipe mode on this side
+ * The pipe is unidirectional. One can either write or read.
  */
 enum xen_shm_pipe_mod {
     xen_shm_pipe_mod_write,
@@ -49,7 +59,8 @@ enum xen_shm_pipe_mod {
 
 
 /*
- * The direction convention between writer/reader offerer/receiver
+ * The direction convention between writer/reader offerer/receiver.
+ * It *must* be the same for both ends.
  */
 enum  xen_shm_pipe_conv {
     xen_shm_pipe_conv_writer_offers,
@@ -60,8 +71,8 @@ enum  xen_shm_pipe_conv {
 
 
 /*
- * Init a pipe. Return 0 if ok. A negative value otherwise.
- * Warning: The Offerer MUST initialize first
+ * Init a pipe.
+ * On succes, returns 0. On error, -1 is returned, and errno is set appropriately.
  */
 int xen_shm_pipe_init(xen_shm_pipe_p * pipe,  /* A returned pointer to a pipe */
                       enum xen_shm_pipe_mod mod,   /* The pipe mod (writer or reader) */
@@ -69,7 +80,8 @@ int xen_shm_pipe_init(xen_shm_pipe_p * pipe,  /* A returned pointer to a pipe */
                       );
 
 /*
- * Receiver's side
+ * Receiver's side steps
+ * Those functions all returns 0 on success and -1 on error and errno is set appropriately.
  */
 
 /* 1. Get receiver's domid to send it to the offerer */
@@ -84,7 +96,8 @@ int xen_shm_pipe_connect(xen_shm_pipe_p pipe, uint8_t page_count, uint32_t offer
 
 
 /*
- * Offerer's side
+ * Offerer's side steps
+ * Those functions all returns 0 on success and -1 on error and errno is set appropriately.
  */
 
 /* 1. Receive receiver's domid */
@@ -100,29 +113,35 @@ int xen_shm_pipe_wait(xen_shm_pipe_p pipe, unsigned long timeout_ms);
 
 
 /*
- * Writes into the pipe. Returns the number of written bytes or -1 and errno is set.
+ * Writes into the pipe. Returns the number of written bytes or -1 and errno is set approprietely.
+ * Blocks until at least one byte is written or an error occurs.
  */
 ssize_t xen_shm_pipe_write(xen_shm_pipe_p pipe, const void* buf, size_t nbytes);
 
 /*
- * Does as write but retry and block until no more bytes can be written or all the nbytes were actually written.
- * Warning: When the pipe is closing, the number of written bytes can take any value between 1 and nbytes.
+ * Behave as write but retry and blocks until no more bytes can be written or nbytes were written.
+ * If an error occurs while some bytes were already written, the number of bytes is returned.
+ * If an error occurs while no byte were written, -1 is returned and errno is set approprietely.
  */
 ssize_t xen_shm_pipe_write_all(xen_shm_pipe_p pipe, const void* buf, size_t nbytes);
 
 /*
  * Read in the pipe. Returns the number of read bytes, 0 if EOF, or -1 and errno is set.
+ * Blocks until at least one byte is read or an error occurs.
  */
 ssize_t xen_shm_pipe_read(xen_shm_pipe_p pipe, void* buf, size_t nbytes);
 
 /*
- * Does as read but retry and block until no more bytes can be read.
- * Warning: When the pipe is closing, the number of read bytes can take any value between 1 and nbytes.
+ * Behave as read but retry and blocks until no more bytes can be read of nbytes were read.
+ * If an error occurs, or the pipe is closed, while some bytes were already written, the number of bytes is returned.
+ * If an error occurs while no byte were written, -1 is returned and errno is set approprietely.
+ * If the pipe is closed while no byte were written, 0 is returned.
  */
 ssize_t xen_shm_pipe_read_all(xen_shm_pipe_p pipe, void* buf, size_t nbytes);
 
 /*
  * All pipes must be freed when they are not used anymore.
+ * It closes the pipe and free the memory.
  */
 void xen_shm_pipe_free(xen_shm_pipe_p);
 

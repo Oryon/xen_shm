@@ -27,7 +27,7 @@
 
 #define XEN_SHM_PIPE_FAST_CHECK_INTERVAL 128 //Will check for the other after the first <value> written or read values (for better delays, it is a small value)
 #define XEN_SHM_PIPE_WAIT_CHECK_PER_ROUND 4 //Minimal number of time the writer/read checks the otherone state while writing/reading
-#define XEN_SHM_PIPE_WAIT_LOOP_LIMIT 10000 //Number of loops a wait can do before performing an ioctl to see if the pipe is broken
+#define XEN_SHM_PIPE_WAIT_LOOP_LIMIT 10000 //Number of loops a wait can do (in active mode) before performing an ioctl to see if the pipe is broken
 
 /* Different reader/writer flags */
 #define XSHMP_OPENED   0x00000001u
