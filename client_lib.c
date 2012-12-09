@@ -10,7 +10,7 @@
 
 
 int
-init_pipe(in_port_t distant_port, struct in_addr *distant_addr, xen_shm_pipe_p receive_fd, xen_shm_pipe_p send_fd, uint8_t proposed_page_page_count)
+init_pipe(in_port_t distant_port, struct in_addr *distant_addr, xen_shm_pipe_p *receive_fd, xen_shm_pipe_p *send_fd, uint8_t proposed_page_page_count)
 {
     struct sockaddr_in addr;
     int ret;
@@ -50,7 +50,7 @@ init_pipe(in_port_t distant_port, struct in_addr *distant_addr, xen_shm_pipe_p r
 
     header->version = XEN_SHM_UDP_PROTO_VERSION;
     header->message = XEN_SHM_UDP_PROTO_CLIENT_HELLO;
-    ret = xen_shm_pipe_getdomid(receive_fd, &client_hello->domid);
+    ret = xen_shm_pipe_getdomid(*receive_fd, &client_hello->domid);
     if (ret != 0) {
         printf("Unable to get local domid\n");
         goto clean_receive_fd;
@@ -109,14 +109,14 @@ init_pipe(in_port_t distant_port, struct in_addr *distant_addr, xen_shm_pipe_p r
         goto cancel_server;
     }
 
-    ret = xen_shm_pipe_connect(send_fd, grant->page_count, grant->domid, grant->grant_ref);
+    ret = xen_shm_pipe_connect(*send_fd, grant->page_count, grant->domid, grant->grant_ref);
     if (ret != 0) {
         printf("Unable to connect xen_shm_pipe\n");
         perror("xen_shm_pipe_connect");
         goto clean_send_fd;
     }
 
-    ret = xen_shm_pipe_offers(receive_fd, proposed_page_page_count, grant->domid, &grant->domid, &grant->grant_ref);
+    ret = xen_shm_pipe_offers(*receive_fd, proposed_page_page_count, grant->domid, &grant->domid, &grant->grant_ref);
     if (ret != 0) {
         printf("Unable to offer xen_shm_pipe\n");
         perror("xen_shm_pipe_offers");
@@ -142,7 +142,7 @@ init_pipe(in_port_t distant_port, struct in_addr *distant_addr, xen_shm_pipe_p r
     return_value = 0;
 
 clean_send_fd:
-    xen_shm_pipe_free(send_fd);
+    xen_shm_pipe_free(*send_fd);
 
 cancel_server:
     if (return_value < 0) {
@@ -151,7 +151,7 @@ cancel_server:
     }
 
 clean_receive_fd:
-    xen_shm_pipe_free(receive_fd);
+    xen_shm_pipe_free(*receive_fd);
 
 shutdown_socket:
     shutdown(client_fd, SHUT_RDWR);
