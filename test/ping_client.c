@@ -85,7 +85,7 @@ main(int argc, char *argv[])
         }
         clock_gettime(CLOCK_REALTIME, &in_stamp);
         printf("Sent at %ld.%09ld\n", out_stamp.tv_sec, out_stamp.tv_nsec);
-        printf("Received at %ld.%09ld\n", out_stamp.tv_sec, out_stamp.tv_nsec);
+        printf("Received at %ld.%09ld\n", in_stamp.tv_sec, in_stamp.tv_nsec);
     }
     return 0;
 }
