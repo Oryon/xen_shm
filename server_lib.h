@@ -11,6 +11,7 @@
 struct xen_shm_server_data {
   xen_shm_pipe_p receive_fd;
   xen_shm_pipe_p send_fd;
+  volatile int stop;
   void *private_data;
 };
 

@@ -17,7 +17,7 @@ ping_server (struct xen_shm_server_data* data)
     uint8_t noise[PACKET_SIZE];
     ssize_t len;
 
-    while (1) {
+    while (!data->stop) {
         len = xen_shm_pipe_read_all(data->receive_fd, &noise, PACKET_SIZE);
         if (len < 0) {
             printf("Unable to receive\n");
@@ -31,6 +31,7 @@ ping_server (struct xen_shm_server_data* data)
             return NULL;
         }
     }
+    return NULL;
 }
 
 

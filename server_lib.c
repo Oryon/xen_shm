@@ -22,6 +22,7 @@
 struct pthread_list {
     pthread_t child;
     struct pthread_list *next;
+    struct xen_shm_server_data child_data;
 };
 
 struct opening_list {
@@ -106,7 +107,6 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
     struct xen_shm_udp_proto_header *header;
     struct xen_shm_udp_proto_client_hello *client_hello;
     struct xen_shm_udp_proto_grant *grant;
-    struct xen_shm_server_data *client_data;
 
     data = w->data;
     send_len = 0;
@@ -197,11 +197,6 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
                     goto free_o_new;
                 }
                 grant = (struct xen_shm_udp_proto_grant*)buffer;
-                client_data = calloc(1, sizeof(struct xen_shm_server_data));
-                if (client_data == NULL) {
-                    printf("Calloc error !\n");
-                    goto free_o_new;
-                }
                 c_new = calloc(1, sizeof(struct pthread_list));
                 if (c_new == NULL) {
                     printf("Calloc error !\n");
@@ -211,30 +206,30 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
                     printf("Unsupported mode !\n");
                     goto free_data;
                 }
-                ret = xen_shm_pipe_init(&client_data->send_fd, xen_shm_pipe_mod_write, xen_shm_pipe_conv_reader_offers);
+                ret = xen_shm_pipe_init(&c_new->child_data.send_fd, xen_shm_pipe_mod_write, xen_shm_pipe_conv_reader_offers);
                 if (ret != 0) {
                     printf("Unable to init xen_shm_pipe\n");
                     perror("xen_shm_pipe_init");
                     goto free_data;
                 }
-                ret = xen_shm_pipe_connect(client_data->send_fd, grant->page_count, grant->domid, grant->grant_ref);
+                ret = xen_shm_pipe_connect(c_new->child_data.send_fd, grant->page_count, grant->domid, grant->grant_ref);
                 PRINTF("Mapping grant from %"PRIu32": first=%"PRIu32"\n", grant->domid, grant->grant_ref);
                 if (ret != 0) {
                     printf("Unable to init xen_shm_receiver\n");
                     perror("xen_shm_pipe_connect");
-                    xen_shm_pipe_free(client_data->send_fd);
+                    xen_shm_pipe_free(c_new->child_data.send_fd);
                     goto free_data;
                 }
-                client_data->receive_fd = o_new->receive_fd;
-                client_data->private_data = data->private_data;
-                ret = pthread_create(&c_new->child, /* Default attr */ NULL, (void * (*)(void *))data->initializer, client_data);
+                c_new->child_data.receive_fd = o_new->receive_fd;
+                c_new->child_data.private_data = data->private_data;
+                c_new->child_data.stop = 0;
+                ret = pthread_create(&c_new->child, /* Default attr */ NULL, (void * (*)(void *))data->initializer, &c_new->child_data);
                 if (ret != 0) {
                     printf("Unable to run child\n");
                     perror("pthead");
-                    xen_shm_pipe_free(client_data->receive_fd);
-                    xen_shm_pipe_free(client_data->send_fd);
+                    xen_shm_pipe_free(c_new->child_data.receive_fd);
+                    xen_shm_pipe_free(c_new->child_data.send_fd);
                     free_opening(data, o_new);
-                    free(client_data);
                     free(c_new);
                     return;
                 }
@@ -249,7 +244,7 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
     return;
 
 free_data:
-    free(client_data);
+    free(c_new);
 
 free_o_new:
     xen_shm_pipe_free(o_new->receive_fd);
@@ -347,16 +342,18 @@ run_server(int port, uint8_t proposed_page_page_count, listener_init initializer
         o_it = o_next;
     }
 
-    /* Send SIGINT signal to childs */
+    /* Ask childs to die */
     c_it = data->childs;
     while (c_it != NULL) {
-        pthread_kill(c_it->child, SIGINT);
+        c_it->child_data.stop = 1;
+        c_it = c_it->next;
     }
 
     /* Wait for childs end*/
     c_it = data->childs;
     while (c_it != NULL) {
         pthread_join(c_it->child, NULL);
+        c_it = c_it->next;
     }
 
     /* Free the list */
