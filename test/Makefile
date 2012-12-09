@@ -23,7 +23,9 @@ CFLAGS?=-pipe -O2 -g -Wall -Wextra -Werror \
         -Wno-format-y2k \
         -Wunsafe-loop-optimizations
 
-all: getdomid propose_content get_content waiter notifyer pipe_reader pipe_writer pipe_perf
+RT_LIBS ?= -lrt
+
+all: getdomid propose_content get_content waiter notifyer pipe_reader pipe_writer pipe_perf ping_client
 
 test: all
 	./getdomid
@@ -51,4 +53,6 @@ pipe_writer: pipe_writer.o ../xen_shm_pipe.o
 	
 pipe_perf: pipe_perf.o ../xen_shm_pipe.o
 	$(LINK.c) $^ $(LOADLIBES) -o $@	
-	
+
+ping_client: ping_client.o ../client_lib.o ../xen_shm_pipe.o
+	$(LINK.c) $^ $(LOADLIBES) $(RT_LIBS) -o $@
