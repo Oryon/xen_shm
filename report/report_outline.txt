@@ -1,0 +1,76 @@
+This is the outline of the report to be written
+
+Part I: Introduction
+
+1. Motivations
+- Cloud computing
+- Xen hypervisor
+- IP stack not efficient
+
+2. Related work
+- XenSocket
+- XWay
+- XenLoop
+- User friendly but sub-optimal
+
+3. Our work
+- Memory mapping in userspace
+- Less syscalls
+- Report outline
+
+
+Part II: Shared memory device
+
+1. Xen shared memory
+- Grant table - grant references
+- Granting and mapping
+
+
+2. Initialization( via ioctls )
+- Different states
+- Ioctl to move from one state to another
+
+
+3. Map memory into user-space 
+
+4. Event channel related operations
+- Ports and event handling
+- Init signal/User signal
+
+5. Closure and broken pipe detection
+- State on shared page
+- Wait queue to free on offerer's side
+
+Part III: Shared memory based circular buffer
+
+1. Principles
+- Read/write in circular buffer
+- Wait when nothing can be done
+- Exchange protocol
+
+2. Optimizations
+- 64b copy if possible
+- Active/passive mod
+
+3. Closure and dead-lock avoidance
+- Flags system
+- Epipe prone system
+
+Part IV: Evaluation
+
+1. Throughput
+- Vary shared memory size and packet size
+- Comparison with other solutions and IP stack
+
+2. Delays
+- Ping measure
+- High frequency pings ?
+- Comparison with other solutions and IP stack
+
+3. Putting the cache under more pressure
+- Multiple parallel communications
+
+
+
+
+
