@@ -18,6 +18,7 @@
 #define __XEN_SHM_PIPE_H__
 
 #include <inttypes.h>
+#include <unistd.h>
 
 
 /*
