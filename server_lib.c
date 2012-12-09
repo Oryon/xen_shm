@@ -27,71 +27,31 @@ struct internal_data {
     uint8_t proposed_page_page_count;
     void *private_data;
     listener_init initializer;
+    struct pthread_list *childs;
+    struct opening_list *current;
 };
 
-static struct pthread_list *childs;
-static struct opening_list *current;
-static struct ev_timer *event_killer;
-static struct ev_loop *event_loop;
-static int server_fd;
+struct ev_loop *event_loop;
+struct ev_timer* event_killer;
 
 static void
 event_end(struct ev_loop *loop, struct ev_timer *w, int revents) {
-    ev_unloop(event_loop, EVUNLOOP_ALL);
+    ev_unloop(loop, EVUNLOOP_ALL);
 }
 
 static void
 clean(int sig)
 {
-    struct pthread_list   *c_it,
-                        *c_next;
-    struct opening_list   *o_it,
-                        *o_next;
-
     /* Stop the listener */
     ev_timer_set(event_killer, 0, 0);
     ev_timer_start(event_loop, event_killer);
-
-    /* Close the fd */
-    shutdown(server_fd, SHUT_RDWR);
-
-    /* Close the currently half-opened connections */
-    o_it = current;
-    while (o_it != NULL) {
-        if (o_it->send_fd != NULL) {
-            xen_shm_pipe_free(o_it->send_fd);
-        }
-        o_next = o_it->next;
-        free(o_it);
-        o_it = o_next;
-    }
-
-    /* Send SIGINT signal to childs */
-    c_it = childs;
-    while (c_it != NULL) {
-        pthread_kill(c_it->child, SIGINT);
-    }
-
-    /* Wait for childs end*/
-    c_it = childs;
-    while (c_it != NULL) {
-        pthread_join(c_it->child, NULL);
-    }
-
-    /* Free the list */
-    c_it = childs;
-    while (c_it != NULL) {
-        c_next = c_it->next;
-        free(c_it);
-        c_it = c_next;
-    }
 }
 
 static struct opening_list*
-find_opening(struct sockaddr_in *source)
+find_opening(struct internal_data *data, struct sockaddr_in *source)
 {
     struct opening_list *temp;
-    temp = current;
+    temp = data->current;
     while (temp != NULL) {
         if ((temp->distant_port == source->sin_port)
             && (memcmp(&source->sin_addr, &temp->distant_addr, sizeof(struct in_addr)) == 0)) {
@@ -102,9 +62,9 @@ find_opening(struct sockaddr_in *source)
 }
 
 static void
-free_opening(struct opening_list* o)
+free_opening(struct internal_data *data, struct opening_list* o)
 {
-    struct opening_list *temp = current;
+    struct opening_list *temp = data->current;
 
     if (temp == NULL) {
         return;
@@ -192,8 +152,8 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
                 grant->mode = XEN_SHM_UDP_PROTO_GRANT_MODE_WRITER_OFFERER;
                 grant->page_count = data->proposed_page_page_count;
                 send_len = sizeof(struct xen_shm_udp_proto_grant);
-                o_new->next = current;
-                current = o_new;
+                o_new->next = data->current;
+                data->current = o_new;
                 goto send;
                 break;
             case XEN_SHM_UDP_PROTO_SERVER_RESET:
@@ -201,13 +161,13 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
                 /* O_o ignoring */
                 return;
             case XEN_SHM_UDP_PROTO_CLIENT_RESET:
-                o_new = find_opening(&source);
+                o_new = find_opening(data, &source);
                 if (o_new != NULL) {
                     goto free_o_new;
                 }
                 return;
             case XEN_SHM_UDP_PROTO_CLIENT_GRANT:
-                o_new = find_opening(&source);
+                o_new = find_opening(data, &source);
                 if (o_new == NULL) {
                     goto server_reset;
                 }
@@ -240,13 +200,13 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
                 if (ret != 0) {
                     xen_shm_pipe_free(client_data->receive_fd);
                     xen_shm_pipe_free(client_data->send_fd);
-                    free_opening(o_new);
+                    free_opening(data, o_new);
                     free(client_data);
                     free(c_new);
                     return;
                 }
-                c_new->next = childs;
-                childs = c_new;
+                c_new->next = data->childs;
+                data->childs = c_new;
                 return;
             default:
                 printf("Bad packet message, ignoring\n");
@@ -257,7 +217,7 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
 
 free_o_new:
     xen_shm_pipe_free(o_new);
-    free_opening(o_new);
+    free_opening(data, o_new);
 
 server_reset:
     header->message = XEN_SHM_UDP_PROTO_SERVER_RESET;
@@ -275,9 +235,11 @@ run_server(int port, uint8_t proposed_page_page_count, listener_init initializer
     struct internal_data *data;
     struct ev_io *event;
     struct sockaddr_in binding_addr;
-
-    childs = NULL;
-    current = NULL;
+    struct pthread_list   *c_it,
+                        *c_next;
+    struct opening_list   *o_it,
+                        *o_next;
+    int server_fd;
 
     event_killer = calloc(1, sizeof(struct ev_timer));
     if (event_killer != NULL) {
@@ -302,6 +264,8 @@ run_server(int port, uint8_t proposed_page_page_count, listener_init initializer
     data->private_data = private_data;
     data->initializer = initializer;
     data->proposed_page_page_count = proposed_page_page_count;
+    data->childs = NULL;
+    data->current = NULL;
 
     server_fd = socket(PF_INET, SOCK_DGRAM, 0);
 
@@ -322,6 +286,7 @@ run_server(int port, uint8_t proposed_page_page_count, listener_init initializer
     }
 
     ev_io_init(event, udp_readable_cb, server_fd, EV_READ);
+    event->data = data;
     ev_io_start(event_loop, event);
 
     ev_init(event_killer, event_end);
@@ -330,7 +295,36 @@ run_server(int port, uint8_t proposed_page_page_count, listener_init initializer
 
     ev_loop(event_loop, 0);
 
-    return 0;
+    /* Close the currently half-opened connections */
+    o_it = data->current;
+    while (o_it != NULL) {
+        if (o_it->send_fd != NULL) {
+            xen_shm_pipe_free(o_it->send_fd);
+        }
+        o_next = o_it->next;
+        free(o_it);
+        o_it = o_next;
+    }
+
+    /* Send SIGINT signal to childs */
+    c_it = data->childs;
+    while (c_it != NULL) {
+        pthread_kill(c_it->child, SIGINT);
+    }
+
+    /* Wait for childs end*/
+    c_it = data->childs;
+    while (c_it != NULL) {
+        pthread_join(c_it->child, NULL);
+    }
+
+    /* Free the list */
+    c_it = data->childs;
+    while (c_it != NULL) {
+        c_next = c_it->next;
+        free(c_it);
+        c_it = c_next;
+    }
 
 close_fd:
     shutdown(server_fd, SHUT_RDWR);
@@ -340,5 +334,5 @@ free_data:
     free(event);
     free(event_killer);
 
-    return -1;
+    return 0;
 }
