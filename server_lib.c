@@ -11,6 +11,14 @@
 
 #include "xen_shm_udp_proto.h"
 
+#define SERVER_LIB_DEBUG 0
+#if SERVER_LIB_DEBUG
+# define PRINTF(...)  printf(__VA_ARGS__)
+#else /* !SERVER_LIB_DEBUG */
+# define PRINTF(...)
+#endif /* ?SERVER_LIB_DEBUG */
+
+
 struct pthread_list {
     pthread_t child;
     struct pthread_list *next;
@@ -148,7 +156,9 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
                     goto server_reset;
                 }
                 grant = (struct xen_shm_udp_proto_grant*)buffer;
+                PRINTF("New grant for %"PRIu32, grant->grant_ref);
                 ret = xen_shm_pipe_offers(o_new->receive_fd, data->proposed_page_page_count, client_hello->domid, &grant->domid, &grant->grant_ref);
+                PRINTF(" (from %"PRIu32"): first=%"PRIu32"\n", grant->domid, grant->grant_ref);
                 if (ret != 0) {
                     printf("Unable to init xen_shm_pipe in offerer mode \n");
                     perror("xen_shm_pipe_offers");
@@ -208,6 +218,7 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
                     goto free_data;
                 }
                 ret = xen_shm_pipe_connect(client_data->send_fd, grant->page_count, grant->domid, grant->grant_ref);
+                PRINTF("Mapping grant from %"PRIu32": first=%"PRIu32"\n", grant->domid, grant->grant_ref);
                 if (ret != 0) {
                     printf("Unable to init xen_shm_receiver\n");
                     perror("xen_shm_pipe_connect");

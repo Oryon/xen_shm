@@ -8,6 +8,13 @@
 
 #include "xen_shm_udp_proto.h"
 
+#define CLIENT_LIB_DEBUG 0
+#if CLIENT_LIB_DEBUG
+# define PRINTF(...)  printf(__VA_ARGS__)
+#else /* !CLIENT_LIB_DEBUG */
+# define PRINTF(...)
+#endif /* ?CLIENT_LIB_DEBUG */
+
 
 int
 init_pipe(in_port_t distant_port, struct in_addr *distant_addr, xen_shm_pipe_p *receive_fd, xen_shm_pipe_p *send_fd, uint8_t proposed_page_page_count)
@@ -112,6 +119,7 @@ init_pipe(in_port_t distant_port, struct in_addr *distant_addr, xen_shm_pipe_p *
             goto cancel_server;
     }
 
+    PRINTF("Mapping grant from %"PRIu32": first=%"PRIu32"\n", grant->domid, grant->grant_ref);
     ret = xen_shm_pipe_connect(*send_fd, grant->page_count, grant->domid, grant->grant_ref);
     if (ret != 0) {
         printf("Unable to connect xen_shm_pipe\n");
@@ -119,7 +127,9 @@ init_pipe(in_port_t distant_port, struct in_addr *distant_addr, xen_shm_pipe_p *
         goto cancel_server;
     }
 
+    PRINTF("New grant for %"PRIu32":", grant->domid);
     ret = xen_shm_pipe_offers(*receive_fd, proposed_page_page_count, grant->domid, &grant->domid, &grant->grant_ref);
+    PRINTF("(from %"PRIu32"): first=%"PRIu32"\n", grant->domid, grant->grant_ref);
     if (ret != 0) {
         printf("Unable to offer xen_shm_pipe\n");
         perror("xen_shm_pipe_offers");
