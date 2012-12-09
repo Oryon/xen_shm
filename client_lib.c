@@ -92,6 +92,7 @@ init_pipe(in_port_t distant_port, struct in_addr *distant_addr, xen_shm_pipe_p *
 
     if (header->message != XEN_SHM_UDP_PROTO_SERVER_GRANT) {
         printf("Protocol error\n");
+        goto cancel_server;
     }
 
     if ((size_t)len < sizeof(struct xen_shm_udp_proto_grant)) {

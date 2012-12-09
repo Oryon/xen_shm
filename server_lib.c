@@ -172,12 +172,14 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
             case XEN_SHM_UDP_PROTO_CLIENT_RESET:
                 o_new = find_opening(data, &source);
                 if (o_new != NULL) {
+                    printf("Client error, purging cache\n");
                     goto free_o_new;
                 }
                 return;
             case XEN_SHM_UDP_PROTO_CLIENT_GRANT:
                 o_new = find_opening(data, &source);
                 if (o_new == NULL) {
+                    printf("Protocole error: CLIENT_GRANT without CLIENT_HELLO\n");
                     goto server_reset;
                 }
                 if ((size_t)len < sizeof(struct xen_shm_udp_proto_grant)) {
@@ -216,6 +218,8 @@ udp_readable_cb(struct ev_loop *loop, struct ev_io *w, int revents)
                 client_data->private_data = data->private_data;
                 ret = pthread_create(&c_new->child, /* Default attr */ NULL, (void * (*)(void *))data->initializer, client_data);
                 if (ret != 0) {
+                    printf("Unable to run child\n");
+                    perror("pthead");
                     xen_shm_pipe_free(client_data->receive_fd);
                     xen_shm_pipe_free(client_data->send_fd);
                     free_opening(data, o_new);
@@ -245,7 +249,11 @@ server_reset:
     send_len = sizeof(struct xen_shm_udp_proto_header);
 
 send:
-    sendto(w->fd, buffer, send_len, /* No flag */ 0, (struct sockaddr *) &source, addr_len);
+    len = sendto(w->fd, buffer, send_len, /* No flag */ 0, (struct sockaddr *) &source, addr_len);
+    if (len < 0) {
+        printf("Error while sending message:\n");
+        perror("sendto");
+    }
 }
 
 
