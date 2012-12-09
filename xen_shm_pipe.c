@@ -333,7 +333,7 @@ __xen_shm_pipe_wait_reader(struct xen_shm_pipe_priv* p) {
     volatile struct xen_shm_pipe_shared* sv;
 
     uint32_t writer_flags;
-    uint32_t read;
+    uint32_t read_p;
     uint32_t loop_count;
     int retval;
     int unset_wait;
@@ -344,15 +344,15 @@ __xen_shm_pipe_wait_reader(struct xen_shm_pipe_priv* p) {
     unset_wait = 0;
     loop_count = XEN_SHM_PIPE_WAIT_LOOP_LIMIT;
 
-    read = s->read;
-    while(read == sv->write) {
+    read_p = s->read;
+    while(read_p == sv->write) {
 
         writer_flags = sv->writer_flags;
         --loop_count;
         s->reader_flags |= XSHMP_WAITING; //Say we are waiting
         unset_wait = 1;
 
-        if(read != sv->write) { //Check nothing changed
+        if(read_p != sv->write) { //Check nothing changed
             break;
         }
 
@@ -412,7 +412,7 @@ __xen_shm_pipe_wait_writer(struct xen_shm_pipe_priv* p) {
     volatile struct xen_shm_pipe_shared* sv;
 
     uint32_t reader_flags;
-    uint32_t write;
+    uint32_t write_p;
     int retval;
     int unset_wait;
     uint32_t loop_count;
@@ -427,12 +427,12 @@ __xen_shm_pipe_wait_writer(struct xen_shm_pipe_priv* p) {
         return -1;
     }
 
-    write = s->write + 1;
-    if(write == p->buffer_size) {
-        write = 0;
+    write_p = s->write + 1;
+    if(write_p == p->buffer_size) {
+        write_p = 0;
     }
 
-    while(write == sv->read) {
+    while(write_p == sv->read) {
 
         reader_flags = sv->reader_flags;
         --loop_count;
@@ -440,7 +440,7 @@ __xen_shm_pipe_wait_writer(struct xen_shm_pipe_priv* p) {
         s->writer_flags |= XSHMP_WAITING; //Say we are waiting
         unset_wait = 1;
 
-        if(write != sv->read) { //Check nothing changed
+        if(write_p != sv->read) { //Check nothing changed
             break;
         }
 
@@ -892,22 +892,22 @@ ssize_t xen_shm_pipe_write_all(xen_shm_pipe_p xpipe, const void* buf, size_t nby
 
 
 ssize_t xen_shm_pipe_read_all(xen_shm_pipe_p xpipe, void* buf, size_t nbytes) {
-    size_t read;
+    size_t readd;
     ssize_t retval;
     uint8_t* buffer;
 
-    read = 0;
+    readd = 0;
     buffer = (uint8_t*) buf;
     while(nbytes) {
         if((retval = xen_shm_pipe_read(xpipe, buffer, nbytes ))<=0) {
-            return(read!=0)?((ssize_t) read):retval;
+            return(readd!=0)?((ssize_t) readd):retval;
         }
-        read += (size_t) retval;
+        readd += (size_t) retval;
         buffer += (ptrdiff_t) retval;
         nbytes -= (size_t) retval;
     }
 
-    return (ssize_t) read;
+    return (ssize_t) readd;
 
 }
 
