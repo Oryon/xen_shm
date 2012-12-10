@@ -148,6 +148,7 @@ struct xen_shm_instance_data {
     unsigned int ec_irq;          //The event channel irq
     uint8_t initial_signal;       //0 before the initial signal has been received, 1 after
     uint8_t user_signal;          //0 when a process is waiting, the handler sets it to one and wakes-up the queue
+    uint8_t latent_user_signal;   //0 when the signal is handled, 1 when a signal has been received
 
     /* State depend variables */
     /* Both */
@@ -242,6 +243,7 @@ xen_shm_event_handler(int irq, void* arg)
         data->initial_signal = 1;
     } else {
         data->user_signal = 1;
+        data->latent_user_signal = 1;
     }
 
     wake_up_interruptible(&data->wait_queue);
@@ -883,8 +885,10 @@ __xen_shm_ioctl_await(struct xen_shm_instance_data* data,
     int user_flag;
     int init_flag;
     int mutex_flag;
+    int user_latent_flag;
 
     user_flag = arg->request_flags & XEN_SHM_IOCTL_AWAIT_USER;
+    user_latent_flag = arg->request_flags & XEN_SHM_IOCTL_AWAIT_LATENT_USER;
     init_flag = arg->request_flags & XEN_SHM_IOCTL_AWAIT_INIT;
     mutex_flag = arg->request_flags & XEN_SHM_IOCTL_AWAIT_MUTEX;
 
@@ -910,7 +914,8 @@ __xen_shm_ioctl_await(struct xen_shm_instance_data* data,
 
     if(arg->timeout_ms == 0) {
         retval = wait_event_interruptible(data->wait_queue,
-                (user_flag&&data->user_signal) || (init_flag&&data->initial_signal) ||
+                (user_flag&&data->user_signal) || (init_flag&&data->initial_signal)
+                || (user_latent_flag&&data->latent_user_signal) ||
                 __xen_shm_is_broken_pipe(meta_page_p));
         if(retval < 0) {
             goto unlock_and_return;
@@ -919,7 +924,8 @@ __xen_shm_ioctl_await(struct xen_shm_instance_data* data,
         jiffies = (arg->timeout_ms*HZ)/1000;
         jiffies = (jiffies==0)?1:jiffies; //Cannot be null
         retval = wait_event_interruptible_timeout(data->wait_queue,
-                (user_flag&&data->user_signal) || (init_flag&&data->initial_signal) ||
+                (user_flag&&data->user_signal) || (init_flag&&data->initial_signal)
+                || (user_latent_flag&&data->latent_user_signal) ||
                 __xen_shm_is_broken_pipe(meta_page_p),
                         jiffies);
         if(retval < 0) {
@@ -927,6 +933,10 @@ __xen_shm_ioctl_await(struct xen_shm_instance_data* data,
         }
         arg->remaining_ms = (retval==jiffies)?arg->timeout_ms:(retval*1000)/HZ;
         retval = 0;
+    }
+
+    if(user_flag || user_latent_flag) {
+        data->latent_user_signal = 0;
     }
 
     if(__xen_shm_is_broken_pipe(meta_page_p)) {
@@ -1002,6 +1012,7 @@ xen_shm_open(struct inode * inode, struct file * filp)
     instance_data->user_mem = NULL;
     instance_data->initial_signal = 0;
     instance_data->user_signal = 0;
+    instance_data->latent_user_signal = 0;
     instance_data->use_ptemod = xen_pv_domain();
     if (instance_data->use_ptemod) {
         instance_data->mm = get_task_mm(current);

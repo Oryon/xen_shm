@@ -118,6 +118,8 @@ struct xen_shm_ioctlarg_await {
 #define XEN_SHM_IOCTL_AWAIT_INIT 0x02
 /* Among all calls specifying this flag, only one can wait. Others return -EDEADLK  */
 #define XEN_SHM_IOCTL_AWAIT_MUTEX 0x04
+/* Wait for a user event that has not been handled (returns immediately if a signal has been received but not handled)  */
+#define XEN_SHM_IOCTL_AWAIT_LATENT_USER 0x08
 
 
 /*
