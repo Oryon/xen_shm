@@ -76,6 +76,7 @@ main(int argc, char *argv[])
                 perror("xen_shm_pipe_write_all");
                 return -1;
             }
+            xen_shm_pipe_flush(send_fd);
             len = xen_shm_pipe_read_all(receive_fd, noise, PACKET_SIZE);
             if (len < 0) {
                 printf("Unable to receive\n");

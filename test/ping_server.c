@@ -30,6 +30,7 @@ ping_server (struct xen_shm_server_data* data)
             perror("xen_shm_pipe_write_all");
             return NULL;
         }
+        xen_shm_pipe_flush(data->send_fd);
     }
     return NULL;
 }
