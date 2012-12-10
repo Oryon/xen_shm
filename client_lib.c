@@ -28,7 +28,7 @@ init_pipe(in_port_t distant_port, struct in_addr *distant_addr, xen_shm_pipe_p *
     struct xen_shm_udp_proto_header *header;
     struct xen_shm_udp_proto_client_hello *client_hello;
     struct xen_shm_udp_proto_grant *grant;
-    enum xen_shm_pipe_conv distant_convention;
+    //enum xen_shm_pipe_conv distant_convention;
 
     return_value = -1;
 
@@ -112,7 +112,7 @@ init_pipe(in_port_t distant_port, struct in_addr *distant_addr, xen_shm_pipe_p *
             printf("xen_shm_pipe_conv_writer_offers not supporter\n");
             goto cancel_server;
         case XEN_SHM_UDP_PROTO_GRANT_MODE_READER_OFFERER:
-            distant_convention = xen_shm_pipe_conv_reader_offers;
+            //distant_convention = xen_shm_pipe_conv_reader_offers;
             break;
         default:
             printf("Protocol error: bad mode\n");
