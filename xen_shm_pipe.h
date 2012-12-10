@@ -140,6 +140,16 @@ ssize_t xen_shm_pipe_read(xen_shm_pipe_p pipe, void* buf, size_t nbytes);
  */
 ssize_t xen_shm_pipe_read_all(xen_shm_pipe_p pipe, void* buf, size_t nbytes);
 
+
+/*
+ * The channel is optimized to avoid system calls. So, sometime, one process can wait while data/space is available.
+ * If the other process doesn't want to read/write anything, but want to be sure the other side will read/write the data,
+ * it can use flush. It simply sends a signal and make sure the other process doesn't block before what precedes the flush.
+ * Return 0 on success and -1 otherwise and errno is set approprietly.
+ */
+int xen_shm_pipe_flush(xen_shm_pipe_p pipe);
+
+
 /*
  * All pipes must be freed when they are not used anymore.
  * It closes the pipe and free the memory.
