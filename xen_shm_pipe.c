@@ -911,6 +911,7 @@ ssize_t xen_shm_pipe_read_all(xen_shm_pipe_p xpipe, void* buf, size_t nbytes) {
 
 }
 
+int
 xen_shm_pipe_flush(xen_shm_pipe_p xpipe) {
     struct xen_shm_pipe_priv* p;
     p = xpipe;
@@ -920,7 +921,7 @@ xen_shm_pipe_flush(xen_shm_pipe_p xpipe) {
         return -1;
     }
 
-    if(__xen_shm_pipe_get_flags(p, 0 /*other flags*/ ) & XSHMP_CLOSED) {//Closed
+    if(*(__xen_shm_pipe_get_flags(p, 0 /*other flags*/ )) & XSHMP_CLOSED) {//Closed
         errno = EPIPE;
         return -1;
     }
