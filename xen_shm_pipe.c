@@ -132,7 +132,7 @@ xen_shm_pipe_init(xen_shm_pipe_p * xpipe,enum xen_shm_pipe_mod mod,enum xen_shm_
     p->conv = conv;
     p->mod = mod;
     p->shared = NULL;
-    p->await_op.request_flags = XEN_SHM_IOCTL_AWAIT_USER;
+    p->await_op.request_flags = XEN_SHM_IOCTL_AWAIT_LATENT_USER;
     p->await_op.timeout_ms = 0;
     p->saw_epipe = 0;
     *xpipe = p;
