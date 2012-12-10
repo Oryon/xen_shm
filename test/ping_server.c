@@ -24,6 +24,7 @@ ping_server (struct xen_shm_server_data* data)
             perror("xen_shm_pipe_read_all");
             return NULL;
         }
+        xen_shm_pipe_flush(data->receive_fd);
         len = xen_shm_pipe_write_all(data->send_fd, &noise, PACKET_SIZE);
         if (len < 0) {
             printf("Unable to send\n");

@@ -83,6 +83,7 @@ main(int argc, char *argv[])
                 perror("xen_shm_pipe_read_all");
                 return -1;
             }
+            xen_shm_pipe_flush(receive_fd);
         }
         clock_gettime(CLOCK_REALTIME, &in_stamp);
         printf("Sent at %ld.%09ld\n", out_stamp.tv_sec, out_stamp.tv_nsec);
