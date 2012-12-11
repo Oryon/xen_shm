@@ -55,8 +55,8 @@ pipe_writer: pipe_writer.o ../xen_shm_pipe.o
 pipe_perf: pipe_perf.o ../xen_shm_pipe.o
 	$(LINK.c) $^ $(LOADLIBES) -o $@	
 
-ping_client: ping_client.o ../client_lib.o ../xen_shm_pipe.o
+ping_client: ping_client.o ../client_lib.o ../xen_shm_pipe.o ../handler_lib.o
 	$(LINK.c) $^ $(LOADLIBES) $(RT_LIBS) -o $@
 
-ping_server: ping_server.o ../server_lib.o ../xen_shm_pipe.o
+ping_server: ping_server.o ../server_lib.o ../xen_shm_pipe.o ../handler_lib.o
 	$(LINK.c) $^ $(LOADLIBES) $(RT_LIBS) $(EV_LIBS) -o $@

@@ -22,7 +22,7 @@
 struct pthread_list {
     pthread_t child;
     struct pthread_list *next;
-    struct xen_shm_server_data child_data;
+    struct xen_shm_handler_data child_data;
 };
 
 struct opening_list {
@@ -35,7 +35,7 @@ struct opening_list {
 struct internal_data {
     uint8_t proposed_page_page_count;
     void *private_data;
-    listener_init initializer;
+    handler_run initializer;
     struct pthread_list *childs;
     struct opening_list *current;
 };
@@ -265,7 +265,7 @@ send:
 
 
 int
-run_server(int port, uint8_t proposed_page_page_count, listener_init initializer, void *private_data)
+run_server(int port, uint8_t proposed_page_page_count, handler_run initializer, void *private_data)
 {
     struct internal_data *data;
     struct ev_io *event;
