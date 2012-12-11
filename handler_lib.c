@@ -4,12 +4,13 @@
 #include <time.h>
 #include <stdio.h>
 #include <errno.h>
+#include <sys/time.h>
 
 #include "handler_lib.h"
 
 static uint32_t unique_handler_id = 0;
 
-uint32_t xen_shm_handler_getId(void);
+uint32_t xen_shm_handler_get_id(void);
 
 uint32_t
 xen_shm_handler_get_id(void) {
