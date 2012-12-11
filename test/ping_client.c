@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include "../client_lib.h"
+#include "../handler_lib.h"
 
 #define PACKET_SIZE 10
 #define NB  500
@@ -25,15 +26,9 @@ main(int argc, char *argv[])
     in_port_t port;
     uint8_t page_count;
     struct in_addr addr;
-    xen_shm_pipe_p receive_fd;
-    xen_shm_pipe_p send_fd;
-    struct timespec in_stamp;
-    struct timespec out_stamp;
+    struct xen_shm_handler_data hdrl_data;
+    pthread_t thread_info;
 
-    uint8_t noise[PACKET_SIZE];
-
-    receive_fd = NULL;
-    send_fd = NULL;
 
     if (argc > 4) {
         printf("Too many arguments\n");
@@ -61,33 +56,14 @@ main(int argc, char *argv[])
         return -1;
     }
 
-    retval = init_pipe(port, &addr, &receive_fd, &send_fd, page_count);
-    if (retval != 0) {
-        printf("Unable to init pipe\n");
-        return -1;
+    retval = run_client_thread(port, &addr, page_count, xen_shm_handler_ping_client,  &hdrl_data, &thread_info);
+
+    if(retval != 0) {
+        return retval;
     }
 
-    while(1) {
-        clock_gettime(CLOCK_REALTIME, &out_stamp);
-        for (i = 0; i < NB; ++i) {
-            len = xen_shm_pipe_write_all(send_fd, noise, PACKET_SIZE);
-            if (len < 0) {
-                printf("Unable to send\n");
-                perror("xen_shm_pipe_write_all");
-                return -1;
-            }
-            xen_shm_pipe_flush(send_fd);
-            len = xen_shm_pipe_read_all(receive_fd, noise, PACKET_SIZE);
-            if (len < 0) {
-                printf("Unable to receive\n");
-                perror("xen_shm_pipe_read_all");
-                return -1;
-            }
-            xen_shm_pipe_flush(receive_fd);
-        }
-        clock_gettime(CLOCK_REALTIME, &in_stamp);
-        printf("Sent at %ld.%09ld\n", out_stamp.tv_sec, out_stamp.tv_nsec);
-        printf("Received at %ld.%09ld\n", in_stamp.tv_sec, in_stamp.tv_nsec);
-    }
+    pthread_join(thread_info, NULL);
+
     return 0;
 }
+
