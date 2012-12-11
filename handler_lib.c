@@ -9,10 +9,10 @@
 
 static uint32_t unique_handler_id = 0;
 
-uint32_t xen_shm_handler_getId();
+uint32_t xen_shm_handler_getId(void);
 
 uint32_t
-xen_shm_handler_get_id() {
+xen_shm_handler_get_id(void) {
     return unique_handler_id++;
 }
 
@@ -97,10 +97,10 @@ void* xen_shm_handler_sender(struct xen_shm_handler_data* data) {
         byte_counter+=trans_data->buffer_len;
         if(trans_data->print_info && byte_counter>trans_data->print_interval_bytes) {
             gettimeofday(&out_stamp , NULL);
-            delay = ((uint64_t) (out_stamp.tv_sec - out_stamp.tv_sec))*1000000 + (uint64_t) (out_stamp.tv_usec - out_stamp.tv_usec);
+            delay = ((uint64_t) (out_stamp.tv_sec - in_stamp.tv_sec))*1000000 + (uint64_t) (out_stamp.tv_usec - in_stamp.tv_usec);
             bandwidth = (((double) byte_counter)*8)/((double) delay);
 
-            printf("%"PRIu32", %"PRIu64", %"PRIu64", Mbps",transfert_id, delay, bandwidth);
+            printf("%"PRIu32", %"PRIu64", %f, Mbps",transfert_id, (uint64_t) out_stamp.tv_sec, bandwidth);
             byte_counter = 0;
             in_stamp = out_stamp;
         }
