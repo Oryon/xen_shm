@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <pthread.h>
 
 #include "xen_shm_udp_proto.h"
 
@@ -171,3 +172,52 @@ shutdown_socket:
 
     return return_value;
 }
+
+
+
+int
+run_client_thread(in_port_t distant_por, struct in_addr *distant_addr, uint8_t proposed_page_page_count,
+        handler_run handler_fct,  struct xen_shm_handler_data* hdlr_data, pthread_t* thread_info)
+{
+
+    int ret;
+
+    hdlr_data->stop = 0;
+
+    ret = init_pipe(distant_port, distant_addr, &hdlr_data->receive_fd, &hdlr_data->send_fd, proposed_page_page_count);
+    if(ret!=0) {
+        perror("init pipe");
+        return ret;
+    }
+
+    ret = pthread_create(thread_info, /* Default attr */ NULL, (void * (*)(void *))handler_fct, hdlr_data);
+    if (ret != 0) {
+        perror("pthread create");
+        xen_shm_pipe_free(hdlr_data->receive_fd);
+        xen_shm_pipe_free(hdlr_data->send_fd);
+        return ret;
+    }
+
+    return 0;
+}
+
+
+int
+run_client(in_port_t distant_por, struct in_addr *distant_addr, uint8_t proposed_page_page_count,
+        handler_run handler_fct,  struct xen_shm_handler_data* hdlr_data, void** returned_value)
+{
+    int ret;
+
+    hdlr_data->stop = 0;
+
+    ret = init_pipe(distant_port, distant_addr, &hdlr_data->receive_fd, &hdlr_data->send_fd, proposed_page_page_count);
+    if(ret!=0) {
+        perror("init pipe");
+        return ret;
+    }
+
+    *returned_value = handler_fct(hdlr_data);
+
+    return 0;
+}
+
