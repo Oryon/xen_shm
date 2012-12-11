@@ -55,6 +55,7 @@ Part III: Shared memory based circular buffer
 3. Closure and dead-lock avoidance
 - Flags system
 - Epipe prone system
+- Flush
 
 Part IV: Evaluation
 
