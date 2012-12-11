@@ -36,7 +36,7 @@ void* xen_shm_handler_ping_client (struct xen_shm_handler_data* data) {
         printf("Sent at %ld.%09ld\n", out_stamp.tv_sec, out_stamp.tv_nsec);
         printf("Received at %ld.%09ld\n", in_stamp.tv_sec, in_stamp.tv_nsec);
     }
-
+    return NULL;
 }
 
 void* xen_shm_handler_ping_server (struct xen_shm_handler_data* data) {

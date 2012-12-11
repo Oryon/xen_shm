@@ -184,7 +184,7 @@ run_client_thread(in_port_t distant_por, struct in_addr *distant_addr, uint8_t p
 
     hdlr_data->stop = 0;
 
-    ret = init_pipe(distant_port, distant_addr, &hdlr_data->receive_fd, &hdlr_data->send_fd, proposed_page_page_count);
+    ret = init_pipe(distant_por, distant_addr, &hdlr_data->receive_fd, &hdlr_data->send_fd, proposed_page_page_count);
     if(ret!=0) {
         perror("init pipe");
         return ret;
@@ -210,7 +210,7 @@ run_client(in_port_t distant_por, struct in_addr *distant_addr, uint8_t proposed
 
     hdlr_data->stop = 0;
 
-    ret = init_pipe(distant_port, distant_addr, &hdlr_data->receive_fd, &hdlr_data->send_fd, proposed_page_page_count);
+    ret = init_pipe(distant_por, distant_addr, &hdlr_data->receive_fd, &hdlr_data->send_fd, proposed_page_page_count);
     if(ret!=0) {
         perror("init pipe");
         return ret;
