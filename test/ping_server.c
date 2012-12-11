@@ -12,7 +12,7 @@
 #define PACKET_SIZE 10
 
 static void*
-ping_server (struct xen_shm_server_data* data)
+ping_server (struct xen_shm_handler_data* data)
 {
     uint8_t noise[PACKET_SIZE];
     ssize_t len;
