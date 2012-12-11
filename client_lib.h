@@ -6,6 +6,7 @@
 #define __XEN_SHM_CLIENT_LIB_H__
 
 #include <netinet/in.h>
+#include <pthread.h>
 
 #include "xen_shm_pipe.h"
 #include "handler_lib.h"

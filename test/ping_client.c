@@ -21,8 +21,6 @@ int
 main(int argc, char *argv[])
 {
     int retval;
-    int i;
-    ssize_t len;
     in_port_t port;
     uint8_t page_count;
     struct in_addr addr;
