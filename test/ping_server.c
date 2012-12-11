@@ -9,34 +9,6 @@
 
 #include "../server_lib.h"
 
-#define PACKET_SIZE 10
-
-static void*
-ping_server (struct xen_shm_handler_data* data)
-{
-    uint8_t noise[PACKET_SIZE];
-    ssize_t len;
-
-    while (!data->stop) {
-        len = xen_shm_pipe_read_all(data->receive_fd, &noise, PACKET_SIZE);
-        if (len < 0) {
-            printf("Unable to receive\n");
-            perror("xen_shm_pipe_read_all");
-            return NULL;
-        }
-        xen_shm_pipe_flush(data->receive_fd);
-        len = xen_shm_pipe_write_all(data->send_fd, &noise, PACKET_SIZE);
-        if (len < 0) {
-            printf("Unable to send\n");
-            perror("xen_shm_pipe_write_all");
-            return NULL;
-        }
-        xen_shm_pipe_flush(data->send_fd);
-    }
-    return NULL;
-}
-
-
 
 int
 main(int argc, char *argv[])
@@ -64,6 +36,6 @@ main(int argc, char *argv[])
         return -1;
     }
 
-    return run_server(port, page_count, ping_server, NULL);
+    return run_server(port, page_count, xen_shm_handler_ping_server, NULL);
 }
 
