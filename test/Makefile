@@ -26,7 +26,7 @@ CFLAGS?=-pipe -O2 -g -Wall -Wextra -Werror \
 RT_LIBS ?= -lrt
 EV_LIBS ?= -lev
 
-all: getdomid propose_content get_content waiter notifyer pipe_reader pipe_writer pipe_perf ping_client ping_server
+all: getdomid propose_content get_content waiter notifyer pipe_reader pipe_writer pipe_perf ping_client ping_server bandwidth
 
 test: all
 	./getdomid
@@ -59,4 +59,7 @@ ping_client: ping_client.o ../client_lib.o ../xen_shm_pipe.o ../handler_lib.o
 	$(LINK.c) $^ $(LOADLIBES) $(RT_LIBS) -o $@
 
 ping_server: ping_server.o ../server_lib.o ../xen_shm_pipe.o ../handler_lib.o
+	$(LINK.c) $^ $(LOADLIBES) $(RT_LIBS) $(EV_LIBS) -o $@
+	
+bandwidth: bandwidth.o ../server_lib.o ../client_lib.o ../xen_shm_pipe.o ../handler_lib.o
 	$(LINK.c) $^ $(LOADLIBES) $(RT_LIBS) $(EV_LIBS) -o $@

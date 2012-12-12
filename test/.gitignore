@@ -8,3 +8,6 @@ waiter
 pipe_reader
 pipe_writer
 pipe_perf
+ping_client
+ping_server
+bandwidth
