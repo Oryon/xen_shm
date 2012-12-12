@@ -36,19 +36,19 @@ int server(int argc, char **argv) {
         return -1;
     }
 
-    if (sscanf(argv[1], "%"SCNu16, &port) != 1) {
+    if (sscanf(argv[2], "%"SCNu16, &port) != 1) {
         printf("Bad port\n");
         usage();
         return -1;
     }
 
-    if (sscanf(argv[2], "%"SCNu8, &page_count) != 1) {
+    if (sscanf(argv[3], "%"SCNu8, &page_count) != 1) {
         printf("Bad page number\n");
         usage();
         return -1;
     }
 
-    if (sscanf(argv[3], "%"SCNu32, &buffer_size) != 1) {
+    if (sscanf(argv[4], "%"SCNu32, &buffer_size) != 1) {
         printf("Bad page count\n");
         usage();
         return -1;
@@ -88,38 +88,38 @@ int client(int argc, char **argv) {
         return -1;
     }
 
-    retval = inet_pton(AF_INET, argv[1], &addr);
+    retval = inet_pton(AF_INET, argv[2], &addr);
     if (retval != 1) {
         printf("Bad address\n");
         usage();
         return -1;
     }
 
-    if (sscanf(argv[2], "%"SCNu16, &port) != 1) {
+    if (sscanf(argv[3], "%"SCNu16, &port) != 1) {
         printf("Bad port\n");
         usage();
         return -1;
     }
 
-    if (sscanf(argv[3], "%"SCNu8, &page_count) != 1) {
+    if (sscanf(argv[4], "%"SCNu8, &page_count) != 1) {
         printf("Bad page count\n");
         usage();
         return -1;
     }
 
-    if (sscanf(argv[4], "%"SCNu32, &buffer_size) != 1) {
+    if (sscanf(argv[5], "%"SCNu32, &buffer_size) != 1) {
         printf("Bad buffer size\n");
         usage();
         return -1;
     }
 
-    if (sscanf(argv[5], "%"SCNu32, &client_count) != 1) {
+    if (sscanf(argv[6], "%"SCNu32, &client_count) != 1) {
         printf("Bad client count\n");
         usage();
         return -1;
     }
 
-    if (sscanf(argv[5], "%"SCNu32, &sleep_interval) != 1) {
+    if (sscanf(argv[7], "%"SCNu32, &sleep_interval) != 1) {
         printf("Bad sleep interval\n");
         usage();
         return -1;
