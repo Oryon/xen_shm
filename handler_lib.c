@@ -119,7 +119,7 @@ void* xen_shm_handler_sender(struct xen_shm_handler_data* data) {
 
             if((uint64_t) out_stamp.tv_sec > last_print_s) {
                 printf("%"PRIu32", %"PRIu64", %"PRIu64", s, %f, Mbps\n",transfert_id,byte_counter ,((uint64_t) out_stamp.tv_sec)*1000 + ((uint64_t) out_stamp.tv_usec)/1000, bandwidth);
-                last_print_s = out_stamp.tv_sec;
+                last_print_s = (uint64_t) out_stamp.tv_sec;
             }
 
             byte_counter = 0;
@@ -181,7 +181,7 @@ void* xen_shm_handler_receiver(struct xen_shm_handler_data* data) {
 
             if((uint64_t) out_stamp.tv_sec > last_print_s) {
                 printf("%"PRIu32", %"PRIu64", %"PRIu64", r, %f, Mbps\n",transfert_id,byte_counter ,((uint64_t) out_stamp.tv_sec)*1000 + ((uint64_t) out_stamp.tv_usec)/1000, bandwidth);
-                last_print_s = out_stamp.tv_sec;
+                last_print_s = (uint64_t) out_stamp.tv_sec;
             }
 
             byte_counter = 0;
