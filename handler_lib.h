@@ -26,9 +26,7 @@ void* xen_shm_handler_ping_server (struct xen_shm_handler_data* data);
 
 struct xen_shm_handler_transfert {
     size_t buffer_len;
-    uint8_t* buffer;
     uint8_t print_info;
-    uint64_t print_interval_bytes;
 };
 
 void* xen_shm_handler_sender(struct xen_shm_handler_data* data);
