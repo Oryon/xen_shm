@@ -4,11 +4,14 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 
 #include "../client_lib.h"
 #include "../server_lib.h"
 
-
+void usage(void);
+int server(int argc, char **argv);
+int client(int argc, char **argv);
 
 void usage(void) {
     printf("server <port> <pages_count> <buffer_size> \n");
@@ -131,7 +134,7 @@ int client(int argc, char **argv) {
         return -1;
     }
 
-    for (i=0; i<client_count; i++) {
+    for (i=0; i<(int) client_count; i++) {
 
         trs[i].buffer_len = (size_t) buffer_size;
         trs[i].print_info = 1;
@@ -149,8 +152,8 @@ int client(int argc, char **argv) {
 
     }
 
-    for (i=0; i<client_count; i++) {
-        pthread_join(&(thread_infos[i]), NULL);
+    for (i=0; i<(int)client_count; i++) {
+        pthread_join(thread_infos[i], NULL);
     }
 
     return 0;
