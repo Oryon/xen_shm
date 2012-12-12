@@ -163,10 +163,10 @@ void* xen_shm_handler_receiver(struct xen_shm_handler_data* data) {
     while(!data->stop) {
 
 
-        ret = xen_shm_pipe_read_all(data->send_fd, buffer, trans_data->buffer_len);
+        ret = xen_shm_pipe_read_all(data->receive_fd, buffer, trans_data->buffer_len);
         if(ret < 0) {
             printf("transfert %"PRIu32" error - ", transfert_id);
-            perror("pipe write all");
+            perror("pipe read all");
             return NULL;
         }
         byte_counter+=trans_data->buffer_len;
