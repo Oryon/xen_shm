@@ -93,10 +93,10 @@ void* xen_shm_handler_sender(struct xen_shm_handler_data* data) {
     transfert_id = xen_shm_handler_get_id();
     byte_counter = 0;
     bandwidth = 2000;
-    print_threashold = (bandwidth * 1000000)/4;
+    print_threashold = (uint64_t) (bandwidth * 1000000)/4;
 
     gettimeofday(&in_stamp , NULL);
-    last_print_s = in_stamp.tv_sec;
+    last_print_s = (uint64_t) in_stamp.tv_sec;
 
     while(!data->stop) {
 
@@ -117,7 +117,7 @@ void* xen_shm_handler_sender(struct xen_shm_handler_data* data) {
             bandwidth = (((double) byte_counter)*8)/((double) delay);
             print_threashold =(uint64_t)  ((bandwidth * 1000000)/4);
 
-            if(out_stamp.tv_sec > last_print_s) {
+            if((uint64_t) out_stamp.tv_sec > last_print_s) {
                 printf("%"PRIu32", %"PRIu64", %"PRIu64", s, %f, Mbps\n",transfert_id,byte_counter ,((uint64_t) out_stamp.tv_sec)*1000 + ((uint64_t) out_stamp.tv_usec)/1000, bandwidth);
                 last_print_s = out_stamp.tv_sec;
             }
@@ -155,10 +155,10 @@ void* xen_shm_handler_receiver(struct xen_shm_handler_data* data) {
     transfert_id = xen_shm_handler_get_id();
     byte_counter = 0;
     bandwidth = 2000;
-    print_threashold = (bandwidth * 1000000)/4;
+    print_threashold = (uint64_t) (bandwidth * 1000000)/4;
 
     gettimeofday(&in_stamp , NULL);
-    last_print_s = in_stamp.tv_sec;
+    last_print_s = (uint64_t) in_stamp.tv_sec;
 
     while(!data->stop) {
 
@@ -179,7 +179,7 @@ void* xen_shm_handler_receiver(struct xen_shm_handler_data* data) {
             bandwidth = (((double) byte_counter)*8)/((double) delay);
             print_threashold =(uint64_t)  ((bandwidth * 1000000)/4);
 
-            if(out_stamp.tv_sec > last_print_s) {
+            if((uint64_t) out_stamp.tv_sec > last_print_s) {
                 printf("%"PRIu32", %"PRIu64", %"PRIu64", r, %f, Mbps\n",transfert_id,byte_counter ,((uint64_t) out_stamp.tv_sec)*1000 + ((uint64_t) out_stamp.tv_usec)/1000, bandwidth);
                 last_print_s = out_stamp.tv_sec;
             }
