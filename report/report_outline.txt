@@ -59,16 +59,20 @@ Part III: Shared memory based circular buffer
 
 Part IV: Evaluation
 
-1. Throughput
+1. Configuration
+- Machine
+- UDP protocol (server-client)
+
+2. Throughput
 - Vary shared memory size and packet size
 - Comparison with other solutions and IP stack
 
-2. Delays
+3. Delays
 - Ping measure
 - High frequency pings ?
 - Comparison with other solutions and IP stack
 
-3. Putting the cache under more pressure
+4. Putting the cache under more pressure
 - Multiple parallel communications
 
 
