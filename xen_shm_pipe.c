@@ -382,9 +382,9 @@ __xen_shm_pipe_wait_reader(struct xen_shm_pipe_priv* p) {
             continue;
         }
 
-        s->reader_flags |= XSHMP_SLEEPING; //Say we are sleeping
+        sv->reader_flags |= XSHMP_SLEEPING; //Say we are sleeping
         retval = __xen_shm_pipe_wait_signal(p);
-        s->reader_flags &= ~XSHMP_SLEEPING; //Wake up !
+        sv->reader_flags &= ~XSHMP_SLEEPING; //Wake up !
         if(retval == -1) {
             if(errno == EPIPE) {
                 p->saw_epipe = 1;
@@ -465,9 +465,9 @@ __xen_shm_pipe_wait_writer(struct xen_shm_pipe_priv* p) {
             continue;
         }
 
-        s->writer_flags |= XSHMP_SLEEPING; //Say we are sleeping
+        sv->writer_flags |= XSHMP_SLEEPING; //Say we are sleeping
         retval = __xen_shm_pipe_wait_signal(p);
-        s->writer_flags &= ~XSHMP_SLEEPING; //Wake up !
+        sv->writer_flags &= ~XSHMP_SLEEPING; //Wake up !
         if(retval == -1) {
             s->writer_flags &= ~XSHMP_WAITING;
             return -1;
