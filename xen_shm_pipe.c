@@ -378,7 +378,7 @@ __xen_shm_pipe_wait_reader(struct xen_shm_pipe_priv* p) {
             continue;
         }
 
-        if((writer_flags & XSHMP_ACTIVE) || (writer_flags & XSHMP_WAITING)) { //Other is waiting, must do an active wait
+        if(/*(writer_flags & XSHMP_ACTIVE) ||*/ (writer_flags & XSHMP_WAITING)) { //Other is waiting, must do an active wait
             continue;
         }
 
@@ -461,7 +461,7 @@ __xen_shm_pipe_wait_writer(struct xen_shm_pipe_priv* p) {
             continue;
         }
 
-        if((reader_flags & XSHMP_ACTIVE) || (reader_flags & XSHMP_WAITING)) { //Other is waiting or active, must do an active wait
+        if(/*(reader_flags & XSHMP_ACTIVE) ||*/ (reader_flags & XSHMP_WAITING)) { //Other is waiting or active, must do an active wait
             continue;
         }
 
