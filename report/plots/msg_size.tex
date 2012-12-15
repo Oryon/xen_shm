@@ -28,13 +28,12 @@
     \addplot [smooth,dashed,mark=*,orange] table[  x index=0,y index=5] {plots/messageSize.txt};
     \addlegendentry{XWay}
     
-    \addplot [smooth,dashed,mark=x, magenta] table[  x index=0,y index=6] {plots/messageSize.txt};
-    \addlegendentry{XenLoop}
-    
     \addplot [smooth,dashed,mark=square*, violet]  table[  x index=0,y index=7,orange] {plots/messageSize.txt};
     \addlegendentry{XenSocket}
 
-    
+    \addplot [smooth,dashed,mark=x, magenta] table[  x index=0,y index=6] {plots/messageSize.txt};
+    \addlegendentry{XenLoop}
+   
     \end{semilogxaxis}
 \end{tikzpicture}
 \caption{Throughput of Xen Pipe with different shared memory sizes (indicated in pages) and other state-of-the-art solutions with respect to the message size}
