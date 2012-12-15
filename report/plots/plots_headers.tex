@@ -1,0 +1,53 @@
+\usepackage{pgfplots}
+
+
+\pgfplotsset{
+    box plot/.style={
+        /pgfplots/.cd,
+        black,
+        only marks,
+        mark=-,
+        mark size=0.2em,
+        /pgfplots/error bars/.cd,
+        y dir=plus,
+        y explicit,
+    },
+    box plot box/.style={
+        /pgfplots/error bars/draw error bar/.code 2 args={%
+            \draw  ##1 -- ++(0.2em,0pt) |- ##2 -- ++(-0.2em,0pt) |- ##1 -- cycle;
+        },
+        /pgfplots/table/.cd,
+        y index=2,
+        y error expr={\thisrowno{3}-\thisrowno{2}},
+        /pgfplots/box plot
+    },
+    box plot top whisker/.style={
+        /pgfplots/error bars/draw error bar/.code 2 args={%
+            \pgfkeysgetvalue{/pgfplots/error bars/error mark}%
+            {\pgfplotserrorbarsmark}%
+            \pgfkeysgetvalue{/pgfplots/error bars/error mark options}%
+            {\pgfplotserrorbarsmarkopts}%
+            \path ##1 -- ##2;
+        },
+        /pgfplots/table/.cd,
+        y index=4,
+        y error expr={\thisrowno{2}-\thisrowno{4}},
+        /pgfplots/box plot,
+    },
+    box plot bottom whisker/.style={
+        /pgfplots/error bars/draw error bar/.code 2 args={%
+            \pgfkeysgetvalue{/pgfplots/error bars/error mark}%
+            {\pgfplotserrorbarsmark}%
+            \pgfkeysgetvalue{/pgfplots/error bars/error mark options}%
+            {\pgfplotserrorbarsmarkopts}%
+            \path ##1 -- ##2;
+        },
+        /pgfplots/table/.cd,
+        y index=5,
+        y error expr={\thisrowno{3}-\thisrowno{5}},
+        /pgfplots/box plot
+    },
+    box plot median/.style={
+        /pgfplots/box plot
+    }
+}

@@ -1,0 +1,48 @@
+
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}
+    \begin{semilogyaxis}[
+        xlabel=Number of parallel flows,
+        ylabel=Throughput (Mbps),
+        legend style={nodes=right},
+        legend pos= south west,
+        scaled ticks=false, 
+        y tick label style={/pgf/number format/.cd,sci,precision=5},
+        compat=1.3,
+        ]
+        
+        
+        \addplot [blue,mark=x] table[x index=0,y index=1] {plots/multi.txt};
+    \addlegendentry{Total throughput}
+        
+     
+    
+    \addplot [smooth, red] table[x index=0,y index=8] {plots/multi.txt};
+    \addlegendentry{Optimal sharing}
+    
+     %\addplot [smooth, black] table[x index=0,y index=5] {multi.txt};
+    %\addlegendentry{Median value}
+    
+    %\addplot [smooth, gray] table[x index=0,y index=6] {multi.txt};
+    
+    %\addplot [smooth, gray] table[x index=0,y index=7] {multi.txt};
+       
+    %\addplot [smooth, lightgray] table[x index=0,y index=3] {multi.txt};
+    
+    %\addplot [smooth, lightgray] table[x index=0,y index=4] {multi.txt};
+    
+    \addplot [box plot median] table {plots/boxes.txt};
+    \addplot [box plot box] table {plots/boxes.txt};
+    \addplot [box plot top whisker] table {plots/boxes.txt};
+    \addplot [box plot bottom whisker] table {plots/boxes.txt};
+    \addlegendentry{Values distribution}
+
+    
+    \end{semilogyaxis}
+\end{tikzpicture}
+\caption{Throughputs of multiple parallel flows (60 shared pages per transfert - messages of 32KiB - average value over more than 20 seconds). The dark line corresponds to the median value. 
+Gray lines correspond to first and last decile. Light gray lines correspond to the maximum and minimum values}
+\label{simult_flows}
+\end{figure}

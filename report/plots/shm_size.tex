@@ -1,0 +1,25 @@
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}
+    \begin{semilogxaxis}[
+        xlabel=Buffer size (KiB),
+        ylabel=Throughput (Mbps),
+        legend style={nodes=right},
+        legend pos= north west,
+        scaled ticks=false, 
+        y tick label style={/pgf/number format/.cd,sci,precision=5},
+        compat=1.3
+        ]
+        
+    \addplot table [ x index=0,y index=1] {plots/bandwidth.txt};
+    \addlegendentry{Xen pipe}
+    
+    \addplot table[ x index=0,y index=2] {plots/bandwidth.txt};
+    \addlegendentry{TCP}
+    
+    
+    \end{semilogxaxis}
+\end{tikzpicture}
+\caption{Comparison between Xen pipe and TCP throughputs for different buffer sizes}
+\label{shm_size}
+\end{figure}
