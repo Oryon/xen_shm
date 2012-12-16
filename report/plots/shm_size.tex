@@ -13,6 +13,9 @@
     \addplot table [ x index=0,y index=1] {plots/bandwidth.txt};
     \addlegendentry{Xen pipe}
     
+    \addplot table[ x index=0,y index=3] {plots/bandwidth.txt};
+    \addlegendentry{Stressed Xen pipe}
+    
     \addplot table[ x index=0,y index=2] {plots/bandwidth.txt};
     \addlegendentry{TCP}
     
