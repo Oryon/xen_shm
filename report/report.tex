@@ -103,10 +103,17 @@ Another restriction of this model concerns hot migration of hosts. If a group of
 
 In order to share some memory, the memory first needs to be allocated in one of the two hosts, that we will call the \emph{offerer}\footnote{This will have implications for the clean termination and memory freeing, as explained later, see section \ref{Termination}.}. When an host do so, it allocates different things, some pages in the real\footnote{In that case, what he believes real, which is protected by Xen.} physical memory and some address space that will be mapped to it. As grants are given on an host to host basis, the \emph{offerer} needs to know the domain id of the other host which will be called the \emph{receiver}. The exact specification of such exchanges of information, using standard communication paths, is outside the scope of our project\footnote{Reader are invited to look at the simple protocol using UDP that we created for that purpose during our test}. Then, by using an \emph{Hypercall}, the \emph{offerer} can ask the hypervisor to grant the right to map. The hypervisor will store the pseudo-physical address that correspond to the grant, together with the domain id of both the \emph{offerer} and the \emph{receiver} and also a ticket number.
 
-With both the \emph{offerer's} domain id and the grant ticket number, the \emph{receiver} can make another \emph{Hypercall} with some references of its own address space: the hypervisor will take care of modifying the memory mapping between the two spaces.
+With both the \emph{offerer's} domain id and the grant ticket number, the \emph{receiver} can make another \emph{Hypercall} with some references of its own address space: the hypervisor will take care of modifying the memory mapping between the two spaces. Mapping in the kernel space is easy, as we fully control what happens. Mapping in the user space, a separate domain with a lot of automatic events, is harder as we will explain in the next section.
+
+In fact, we are not using directly the Hypercalls. Those are pretty stable but needs work to be done around them depending on the hardware, the kernel/Xen versions and so on. Recent Linux kernels provide an API to abstract all of this, but this API have recurrent small changes\footnote{For example the function \emph{gnttab\_unmap\_refs} is different between the three kernel we used.} as more functionalities are added. Even if this API is currently more volatile, we still believe that using it will provide a better long-term stability.
 
 \subsection{Map memory into user-space}
+\label{userspace}
+As this implementation tries to limit the kernel involvement, it maps directly the shared memory into the userspace, allowing direct read/write accesses without any overhead.
 
+On the \emph{offerer} side, the mapping is easy as the kernel already prepare all the work for device drivers: when standard device driver functions are called (open, nmap, munmap, close), the kernel automatically prepare or clean memory needed. Furthermore, a function, \emph{remap\_pfn\_range}, exists for simple remapping, making this remapping a child problem.
+
+On the other side, the \emph{receiver} one, things are more complicated. At first sight, one can simply call the xen API with the user space address. It will somehow work, that is it will map the physical memory and grant the access as we want, but it won't last long as it will taint the kernel with page errors on the unmapping. The correct approach is to work on a lower lever, page tables, and to correctly invalidate the mapping on a early stage of the memory unmapping\footnote{Dedicated MMU Notifier Operation are registered in the memory management system in order to do so.}. This part of our work is inspired by the Linux \emph{gntdev} that allows to map memory into user space (But without all the automatic exchanges nor the signals that we wanted). Even if our code was fully rewritten for simplicity purposes, maintainers and users are encouraged to monitor modifications of this part of the Kernel on each major update as it will be probably be maintained by Linux kernel or Xen developers as new functionalities kicks in.
 
 
 \subsection{Event channel}
@@ -116,12 +123,9 @@ With both the \emph{offerer's} domain id and the grant ticket number, the \emph{
 \subsection{Termination}
 \label{Termination}
 
+Outside the correct memory invalidation that we talked about in section \ref{userspace}, because of the non-symmetrical model of the memory sharing, special care is needed before completely cleaning the module. The initial physical space belongs to the \emph{offerer}, that internally allocated it, mapped it and told Xen about its exact location. When closing the module, the \emph{offerer} needs to free it as we don't want such enormous memory leakages. But as we are talking about direct mapping, if the \emph{receiver} still have an active mapping, it will be able to modify the physical memory. If the \emph{offerer} frees the memory without any check, it will be potentially re-allocated later somewhere else by any application or kernel actions and if the \emph{receiver} modify it at this point, unspecified errors are expected from the resulting non-desired sharing.
 
-
-
-
-
-
+The Xen API provides methods to detect the number of active mappings per grant. As a result our implementation checks for potential active mapping and prevent memory freeing if necessary. From the user point of view, the mapping will be undone and the function call returns immediately but internally information about memory is kept and the unmapping is scheduled to take place later.
 
 \section{Shared memory based circular buffer}
 
