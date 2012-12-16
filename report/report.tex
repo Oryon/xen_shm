@@ -66,12 +66,14 @@ Furthermore as network interface use interruptions to indicate new packets, goin
 
 \input{xen_normal_architecture}
 
-Xen offers an way to directly share memory between hosts.
+Xen offers a way to directly share memory between hosts.
 Using such dedicated memory should allow to create channels between virtual hosts with only a few data copies and little to no kernel involvement.
 
 \subsection{Related work}
 
+The Xen's \emph{grant table} feature offers an interface for different domU kernels to share memory pages with each other, allowing different domain's drivers to share information and making optimized communication channels possible. As the perspective of obtaining a very fast communication system appeared to be very attractive, some solutions has been proposed. XenSocket\cite{XenSocket} provides the user a new socket interface ( \emph{AF_XEN} ), so that only a few modifications are needed at the application layer. XWay\cite{XWay} implements a new transport layer, under the \emph{INET} layer and over the \emph{TCP} layer, and use a shared memory channel whenever it is possible, so that no modifications are needed at the application layer. XenLoop\cite{XenLoop}, finally, acts at the IP layer, offering the advantage of not only being fully transparent but also supporting migrations. 
 
+All those solutions are pretty efficient and very user friendly, letting no much more space for improvement, but all of them, as the user space cannot access the shared memory, require system calls in order to achieve read and write operations, making it less efficient than it could theoretically be. Also, as the Xen's \emph{grant table} interface changes a lot, most of those implementations would need modifications in order to compile (they are not maintained). Actually, the only well maintained driver we found is \emph{gntdev}. It enables shared memory mapping into the user space, but doesn't provide any communication interface. Yet we didn't choose to use this device, its source code helped us achieving mapping of shared memory into the user space. 
 
 
 \subsection{Our work}
@@ -221,14 +223,17 @@ With both the \emph{offerer's} domain id and the grant ticket number, the \emph{
 
 \begin{thebibliography}{1}
 
-\bibitem{IEEEhowto:kopka}
+\bibitem{XenSocket}
 Xiaolan Zhang et al., \emph{XenSocket: A High-Throughput Interdomain Transport for Virtual Machines}, Middleware '07.
 
-\bibitem{IEEEhowto:kopka}
+\bibitem{XWay}
 Kangho Kim et al., \emph{Inter-domain Socket Communications Supporting High Performance and Full Binary Compatibility on Xen}, VEE '08.
 
-\bibitem{IEEEhowto:kopka}
+\bibitem{XenLoop}
 Jian Wang et al., \emph{XenLoop : A Transparent High Performance Inter-VM Network Loopback}, HPDC '08.
+
+\bibitem{gntdev}
+Derek G. Murray, Grzegorz Milos & Steven Hand, \emph{Improving Xen Security through Disaggregation}, VEE '08.
 
 \end{thebibliography}
 
