@@ -1,0 +1,57 @@
+\begin{figure}[h]
+  \centering
+  \begin{tikzpicture}
+      [domU/.style={
+           rectangle split,
+           rectangle split parts=5,
+           rounded corners,
+           draw=black, very thick,
+           text centered,
+           anchor=five
+         },
+       dom0/.style={
+           rectangle split,
+           rectangle split parts=2,
+           rounded corners,
+           draw=black, very thick,
+           text centered,
+           anchor=two
+         },
+       ]
+    \node [domU, label=below:Guest 1] (dom1) at (-3,0) {
+      Application
+      \nodepart{two}
+      Socket Layer
+      \nodepart{three}
+      Transport Layer
+      \nodepart{four}
+      Network Layer
+      \nodepart{five}
+      Netfront Driver
+    };
+    
+    \node [domU, label=below:Guest 2] (dom2) at (3.05,0) {
+      Application
+      \nodepart{two}
+      Socket Layer
+      \nodepart{three}
+      Transport Layer
+      \nodepart{four}
+      Network Layer
+      \nodepart{five}
+      Netfront Driver
+    };
+
+    \node [dom0, label=below:Dom 0] (dom0) at (0.55,0) {
+      Software bridge
+      \nodepart{two}
+      Netback
+    };
+
+    \path (-0.5,0.1) edge [draw=black, very thick, <->] (-0.2,0.1);
+    \path (2.5,0.1) edge [draw=black, very thick, <->] (2.8,0.1);
+    
+  \end{tikzpicture}
+  \caption{Normal IP architecture of Xen domUs}
+  \label{xen_normal_architecture}
+\end{figure}

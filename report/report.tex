@@ -5,6 +5,9 @@
   \usepackage{stfloats}
   \usepackage{listings}
   \usepackage{caption}
+
+  \usepackage{tikz}
+  \usetikzlibrary{shapes.multipart}  
   
   \include{plots/plots_headers}
   
@@ -54,17 +57,17 @@ As a result, in order to be competitive, works have been done to enhance virtual
 Individual computing capacity of virtual machines do not suffer performance issue anymore, but, in the case of distributed systems, there is still room for optimization in the network stack.
 Our project consists in creating an optimized exchange channel between two virtual machines running on a single Xen hypervisor which would improve both bandwidth and delays.
 
-
-
-%\hfill mds
- 
-%\hfill January 11, 2007
-
 \subsection{Motivations}
 
+Between normal virtual host, the standard communication channels use the network stack.
+Between two applications, a message passing through the network stack will need to go into the local IP stack, travel from the host to dom0 through the virtual interface, be routed or switched back to the other host through the other virtual interface, follow the local IP stack and then arrive in the application.
+Going through all those different parts results in successive copies of the same packet in different memories, thus cost a lot.
+Furthermore as network interface use interruptions to indicate new packets, going through the network stack generate a lot of kernel context switch.
 
+\input{xen_normal_architecture}
 
-
+Xen offers an way to directly share memory between hosts.
+Using such dedicated memory should allow to create channels between virtual hosts with only a few data copies and little to no kernel involvement.
 
 \subsection{Related work}
 
