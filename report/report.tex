@@ -90,13 +90,21 @@ The next parts of this report are dedicated to the explanation, in more details,
 
 \section{Shared memory device}
 
+The first realisation of our project is a Linux kernel module which defines a new device driver. According to the end-to-end principle, it's a really dumb module that just gives the user tools to share memory and signals, without any practical protocol for how to use it. As the Linux kernel, and more precisely its Xen parts, always change, our module is only guaranteed to work on Linux kernel version 3.2.32 (Debian testing), 3.4.9 and 3.5.4 (Gentoo Linux stable).
+
 \subsection{Xen shared memory}
 
+In the normal Xen model, each virtual host have its own memory address space which are mapped to non-overlapping physical memory, providing the usual abstraction of total ownership of the memory space to each host. Nevertheless, the Xen hypervisor can also remap the memory of an host into the address space of another host. In order to do so, an host $A$ must ask the hypervisor to grant the right to use a given part of its physical memory to a given host $B$. The hypervisor will issue a ticket which can be used by the $A$ to map the physical memory from $A$ into its own address space.
 
+The implementation of this protocol can be considered as a potential security breach: from our experiments, we tend to believe that the entropy of the domain id (16 bits) and the ticket (32 bits) is really small (and the tickets seems to be simply increasing). Thus an attacker that obtained access to one of the two hosts, as long as it have access to the userspace tools to map the memory, could also, by guessing or brute-forcing those ids, map the same physical memory and thus spy or modify the data. Such a security problem doesn't come from our system but from Xen, thus we believe that it will be fixed in the near future.
+
+Another restriction of this model concerns hot migration of hosts. If a group of hosts shares two-by-two some memory then none of them can be migrated to another machine as it is not possible to share physical memory between two distant nodes (at least with the current technology). The current sharing mechanism and grant system doesn't provide a way to detect and prevent or cope with such migrations, thus our system will probably utterly crash if this occurs. If thus API are provided by Xen in the future, mechanisms that disable the channel could be implemented.
 
 \subsection{Create shared memory}
 
+In order to share some memory, the memory first needs to be allocated in one of the two hosts, that we will call the \emph{offerer}\footnote{This will have implications for the clean termination and memory freeing, as explained later, see section \ref{Termination}.}. When an host do so, it allocates different things, some pages in the real\footnote{In that case, what he believes real, which is protected by Xen.} physical memory and some address space that will be mapped to it. As grants are given on an host to host basis, the \emph{offerer} needs to know the domain id of the other host which will be called the \emph{receiver}. The exact specification of such exchanges of information, using standard communication paths, is outside the scope of our project\footnote{Reader are invited to look at the simple protocol using UDP that we created for that purpose during our test}. Then, by using an \emph{Hypercall}, the \emph{offerer} can ask the hypervisor to grant the right to map. The hypervisor will store the pseudo-physical address that correspond to the grant, together with the domain id of both the \emph{offerer} and the \emph{receiver} and also a ticket number.
 
+With both the \emph{offerer's} domain id and the grant ticket number, the \emph{receiver} can make another \emph{Hypercall} with some references of its own address space: the hypervisor will take care of modifying the memory mapping between the two spaces.
 
 \subsection{Map memory into user-space}
 
@@ -106,8 +114,8 @@ The next parts of this report are dedicated to the explanation, in more details,
 
 
 
-\subsection{Closure}
-
+\subsection{Termination}
+\label{Termination}
 
 
 
