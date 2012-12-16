@@ -151,19 +151,43 @@ Both sides kernels also maintained a shared state field, inside the header page,
 
 \section{Shared memory based circular buffer}
 
+Once two processes share memory, they can obviously transfer data, but our goal in this project was to offer an optimized pipe, as fast as it possibly can, while remaining resource efficient. Therefore, the pipe library not only offers a more user-friendly interface for transmitting data using the shared memory device, but it also implements different optimization techniques that provide much better performances than any other state-of-the-art solutions. 
+
 \subsection{Principles}
+
+The unidirectional communication channel relies on the very simple and well known circular buffer structure, which offers the pretty interesting particularity that it is wait free as long as it is neither empty or full. The \emph{writer} and the \emph{reader} share their own position cursor, indicating where they currently are and how far the other peer can go in the buffer. Both peer also keep a flag field that allows them to gives some more information about their state. A flag, for example, is used to close the pipe. Typically, the \emph{writer} sets it when he has nothing left to writer, just before closing the device. 
+
+Although we cannot be as transparent as existing solutions, our implementation was conceived to be as user friendly as possible. The bootstrap needs the peers to exchange information and to call different functions, but once it is done, the interface is very similar to the file interface. 
+
+As it is unidirectional, peers are called \emph{writer} and \emph{reader}. One pipe, using some shared memory instance, needs exactly one \emph{writer} and one \emph{reader}, but those roles have nothing to do with the underlying \emph{offerer} and \emph{referer} roles, which refer to the owner of the physical memory. Some peer can be wether the \emph{offerer} or the \emph{receiver}, as long as they use the same convention. Nevertheless, note that it is best practice to make the \emph{reader} to be the \emph{offerer}. Indeed, during a graceful transfer, the \emph{writer} usually decides when we wants to stop transmitting, and it is better to close the \emph{receiver} before the \emph{offerer} so that every shared entry can be immediately ungranted (otherwise it has to be put in the 'close later' queue).
 
 
 
 \subsection{Optimizations}
 
+Circular buffers are very simple structures, but optimizing them can be tricky. The first, and obvious, optimization consists in copying words instead of bytes. As our evaluation systems use 64bits processors, we optimized the copying to be done on 64bits aligned words. Therefore, it is best-practice to use 64bits aligned buffers when performing read and write operations. 
+
+When the buffer is full (resp. empty), the writer (resp. the reader), must wait. Also, when data or space becomes available, some process must notify the other process. But those two operations can only be performed through system calls. That's why we also needed to reduce the number of \emph{wait} and \emph{notify} calls. 
+
+First, to reduce the number of \emph{notify} calls, the \emph{sleeping} flag is used to tell wether a process is waiting or not. A process checks this flag at least one time per \emph{read} or \emph{write} call, and four time per buffer round (so a process is only woke up when there is a significant amount of available data/space), and sends a signal if necessary. On the other hand, a process sets this flag just before calling the \emph{wait ioctl}, and unsets it after wake up. Of course, this creates a race condition, but we explain how this problem was solved in the next section.
+
+Then, we also want to avoid unnecessary \emph{wait} calls. An obvious way to do it would be to loop until data/space is available, and it would work, as long as the process is alone on the machine. Otherwise, the kernel scheduler would unschedule the process and significantly reduce the performances. Overmore, it wouldn't be resources efficient. We use the \emph{active} flag in order to tell the other process wether we are currently doing something. If set, the other process will wait actively (loop) instead of calling the \emph{wait} ioctl (and so the other process will not call \emph{notify}). Nevertheless, when a lot of processes are running, a process can be unscheduled, and the other process can loop for nothing. Therefore, there is a limitation on the number of consecutive loops, after which the process will try to sleep. This limit is empirical and the optimal value depends on the number of processes. A large value is optimized for a few processes running at the same time, a smaller value for multiple processes, where unscheduling happens often.  
 
 
-\subsection{Closure and dead-lock avoidance}
+\subsection{Dead-lock avoidance}
+
+Of course, a process must be extremely careful before putting itself into sleep, or even while looping, because the other process could wether be waiting, or even crashed. That's why we used another flag, \emph{waiting}, that a process sets whenever we starts waiting for data/space, and unsets it at the end. The key idea, of course, is to forbid sleeping when the other process set this flag\footnote{An important point for efficiency is to notice that there is wether space or data available, so even if both processes can wait at the same time, it can't be the case for very long}, which implies a weak form of consensus. Using only registers, this cannot be solved by a determinist algorithm, but as both processes should never wait at the same time, we found a way to solve the problem. The basic idea is to continue looping as long as there is no available data/space. At the beginning of each loop, we set the waiting flag, and then see if the looping continue is still true. This ensures that the other process could not have entered the waiting loop before we set the flag. And therefore, he knows we are waiting, which prevents him from sleeping.
+
+As we said earlier, a process doesn't always sends a signal after an operation, even though the other process is going to wait for it (there is a race condition). This is not a problem as long as both processes continue writing and reading, because everything is done to wake up sleeping processes. But, if some process wants do to something else, nothing ensures the other process will be able to full/empty the buffer completely. Therefore, we provide the user the \emph{flush} function, which will simply sends a signal through the event channel. Because of the way we wait for signals\footnote{A signal, if not immediately handled, immediately wakes up any future waiting process }, this ensures all the data/space that was available before the user called \emph{flush} to be correctly handled by the other process. 
 
 
+\subsection{Closing the pipe}
 
+Whenever a process closes the pipe, it sets the closed flag, so that the other peer can know it. When it's set, any \emph{write} will fail and \emph{read} will fail as soon as there is no more available data.  
 
+But we still have a problem if some process crashes. When it occurs, the kernel will close the device file, modify the shared state, and send a signal, so that any waiting process will receive the \emph{EPIPE} error. But in some previously described cases, a process is prevented from sleeping (active loop). So each process that makes more than a fixed number loop must check if the channel is still open. It is done by waiting for the initialization signal, so that it wether returns 0 or \emph{EPIPE}. 
+
+Those mechanisms, put together, offers graceful termination and prevents dead-locks. Nevertheless, processes can loop when the other kernel crashes. The event channel could be used to send regular keep-alive, but we did not have the time to implement it.  
 
 
 \section{Evaluation}
