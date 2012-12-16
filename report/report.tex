@@ -71,24 +71,22 @@ Using such dedicated memory should allow to create channels between virtual host
 
 \subsection{Related work}
 
-The Xen's \emph{grant table} feature offers an interface for different domU kernels to share memory pages with each other, allowing different domain's drivers to share information and making optimized communication channels possible. As the perspective of obtaining a very fast communication system appeared to be very attractive, some solutions has been proposed. XenSocket\cite{XenSocket} provides the user a new socket interface ( \emph{AF_XEN} ), so that only a few modifications are needed at the application layer. XWay\cite{XWay} implements a new transport layer, under the \emph{INET} layer and over the \emph{TCP} layer, and use a shared memory channel whenever it is possible, so that no modifications are needed at the application layer. XenLoop\cite{XenLoop}, finally, acts at the IP layer, offering the advantage of not only being fully transparent but also supporting migrations. 
+The Xen's \emph{grant table} feature offers an interface for different domU kernels to share memory pages with each other, allowing different domain's drivers to share information and making optimized communication channels possible. As the perspective of obtaining a very fast communication system appeared to be very attractive, some solutions has been proposed. XenSocket\cite{XenSocket} provides the user a new socket interface (\emph{AF\_XEN}), so that only a few modifications are needed at the application layer. XWay\cite{XWay} implements a new transport layer, under the \emph{INET} layer and over the \emph{TCP} layer, and use a shared memory channel whenever it is possible, so that no modifications are needed at the application layer. XenLoop\cite{XenLoop}, finally, acts at the IP layer, offering the advantage of not only being fully transparent but also supporting migrations. 
 
-All those solutions are pretty efficient and very user friendly, letting no much more space for improvement, but all of them, as the user space cannot access the shared memory, require system calls in order to achieve read and write operations, making it less efficient than it could theoretically be. Also, as the Xen's \emph{grant table} interface changes a lot, most of those implementations would need modifications in order to compile (they are not maintained). Actually, the only well maintained driver we found is \emph{gntdev}. It enables shared memory mapping into the user space, but doesn't provide any communication interface. Yet we didn't choose to use this device, its source code helped us achieving mapping of shared memory into the user space. 
+As the Xen's \emph{grant table} interface changes a lot, most of those implementations would need modifications in order to compile (they are not maintained). Actually, the only well maintained driver we found is \emph{gntdev}. It enables shared memory mapping into the user space, but doesn't provide any communication interface. We didn't choose to use this device, but its source code helped us in achieving mapping of shared memory into the user space. 
 
 
 \subsection{Our work}
 
-This projects tries tobuild a channel between two virtual hosts better than the existing solutions. For that purpose, the channel directly puts the shared memory into the userspace, reducing to the minimum the number of system calls (and thus context switching) and also transferring the data with only to successive copies. Our implementation is divided into two parts:
+Those solutions are pretty efficient and very user friendly, letting no much more space for improvement, but all of them, as the user space cannot directly access the shared memory, require system calls (and thus context switching) in order to achieve read and write operations, making it less efficient than it could theoretically be. In this report, we present our own optimized communication system, based on shared memory. It performs way better than other existing solutions but, as a tradeoff, also needs the user to be aware of some particularities.
 
 \input{xen_shm}
 
-The Xen shared memory tool, a kernel module, provides a way of sharing memory between two user-spaces of possibly different virtual machines on the same Xen hypervisor.
-For performance purposes and because of possible dead-locks, this module also contains a set of particular operations that needs kernel context switching but that provide signals between
-the two clients.
+Our implementation is divided into two parts. First, the Xen shared memory tool, a device kernel module, provides a way of sharing memory between two user-spaces of possibly different virtual machines on the same Xen hypervisor. For performances purposes and because of possible dead-locks, it also uses a bidirectional event channel and therefore provides the user \emph{wait} and \emph{notify} operations.
 
-The second part, a user space library on top of the kernel module interface, provides read and write operations like any unidirectional channel abstraction. It abstracts the inner work that transform memory into a unidirectional channel, using as few system calls as possible.
+The second layer of our solution, a user space library on top of the kernel shared memory module, provides a \emph{file-like} interface, allowing the user to set-up a unidirectional channel and use it to send or receive data. It abstracts the inner work that transforms memory into an optimized circular buffer that only makes necessary system calls.
 
-The next parts of this report are dedicated to the explanation, in more details, of those two different parts.
+In the second and third parts of this report, we detail the functioning of those two different elements. And we present, in the fourth part, the performances of our solution. 
 
 \section{Shared memory device}
 
@@ -233,7 +231,7 @@ Kangho Kim et al., \emph{Inter-domain Socket Communications Supporting High Perf
 Jian Wang et al., \emph{XenLoop : A Transparent High Performance Inter-VM Network Loopback}, HPDC '08.
 
 \bibitem{gntdev}
-Derek G. Murray, Grzegorz Milos & Steven Hand, \emph{Improving Xen Security through Disaggregation}, VEE '08.
+Derek G. Murray, Grzegorz Milos and Steven Hand, \emph{Improving Xen Security through Disaggregation}, VEE '08.
 
 \end{thebibliography}
 
