@@ -146,8 +146,13 @@ The Xen API provides methods to detect the number of active mappings per grant. 
 
 \section{Evaluation}
 
+Because of the instability of the Xen system and of the Linux kernel, it is currently not possible to do an exact comparison between other similar idea/implementation. In order to be as fair as possible we chose to use old hardware that dates from approximately the same period as the quoted related work.
 
 \subsection{Configuration}
+
+Our experiments were run on an Intel\textregistered ~Core\texttrademark 2 Quad Processor Q9550, running at 2.83 GHz with a L2 cache of 12MB and equipped with 4GB of standard DDR2-800 RAM. We are aware that such a system is not representative of recent dedicated virtualisation servers, but results are still impressive. With the recent improvements of caches, sharing mechanisms inside CPUs and memory access, we believe that our system will present far better results on modern systems. For example, tests run inside a virtualised environment on a two years old Intel\textregistered ~i7 processor showed result close to an order of magnitude better that the ones presented in this report, but fairness with other existing implementation was, in our eyes, more important.
+
+The final tests were run using Xen 4.2.1 on top of Linux 3.5.7. We used the Gentoo Linux distribution for both the dom0 and the domUs. We also pinned the CPUs: dom0 always had 2 CPUs and 2GB of memory. Depending on the tests, either we used two hosts with 1 CPU and 1GB of memory each, either we used only one other host with 2 CPUs and still 1GB of memory. We allocated a lot of memory to each hosts but almost none of it was used by our system that only allocate one shared buffer.
 
 \subsection{Throughput}
 
