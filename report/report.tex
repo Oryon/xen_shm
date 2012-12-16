@@ -74,10 +74,19 @@ Using such dedicated memory should allow to create channels between virtual host
 
 
 
-
 \subsection{Our work}
 
+This projects tries tobuild a channel between two virtual hosts better than the existing solutions. For that purpose, the channel directly puts the shared memory into the userspace, reducing to the minimum the number of system calls (and thus context switching) and also transferring the data with only to successive copies. Our implementation is divided into two parts:
 
+\input{xen_shm}
+
+The Xen shared memory tool, a kernel module, provides a way of sharing memory between two user-spaces of possibly different virtual machines on the same Xen hypervisor.
+For performance purposes and because of possible dead-locks, this module also contains a set of particular operations that needs kernel context switching but that provide signals between
+the two clients.
+
+The second part, a user space library on top of the kernel module interface, provides read and write operations like any unidirectional channel abstraction. It abstracts the inner work that transform memory into a unidirectional channel, using as few system calls as possible.
+
+The next parts of this report are dedicated to the explanation, in more details, of those two different parts.
 
 \section{Shared memory device}
 

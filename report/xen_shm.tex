@@ -1,0 +1,34 @@
+\begin{figure}[h]
+  \centering
+  \begin{tikzpicture}
+      [domU/.style={
+           rectangle split,
+           rectangle split parts=3,
+           rounded corners,
+           draw=black, very thick,
+           text centered,
+           anchor=three
+         },
+       ]
+    \node [domU, label=below:Guest 1] (dom1) at (-2.8,0) {
+      Application
+      \nodepart{two}
+      Pipe Emulation
+      \nodepart{three}
+      Sharing module
+    };
+    
+    \node [domU, label=below:Guest 2] (dom2) at (2.8,0) {
+      Application
+      \nodepart{two}
+      Pipe Emulation
+      \nodepart{three}
+      Sharing module
+    };
+
+    \path (-0.3,0.1) edge [draw=black, very thick, <->] node [above] {Shared Memory} node [below] {Signals} (2.5,0.1);
+    
+  \end{tikzpicture}
+  \caption{Optimised channel using shared memory and signals}
+  \label{xen_shm}
+\end{figure}
