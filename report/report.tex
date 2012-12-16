@@ -87,13 +87,16 @@ The second layer of our solution, a user space library on top of the kernel shar
 
 In the second and third parts of this report, we detail the functioning of those two different elements. And we present, in the fourth part, the performances of our solution. 
 
+
+
+
 \section{Shared memory device}
 
 The first realisation of our project is a Linux kernel module which defines a new device driver. According to the end-to-end principle, it's a really dumb module that just gives the user tools to share memory and signals, without any practical protocol for how to use it. As the Linux kernel, and more precisely its Xen parts, always change, our module is only guaranteed to work on Linux kernel version 3.2.32 (Debian testing), 3.4.9 and 3.5.4 (Gentoo Linux stable).
 
 \subsection{Xen shared memory}
 
-In the normal Xen model, each virtual host have its own memory address space which are mapped to non-overlapping physical memory, providing the usual abstraction of total ownership of the memory space to each host. Nevertheless, the Xen hypervisor can also remap the memory of an host into the address space of another host. In order to do so, an host $A$ must ask the hypervisor to grant the right to use a given part of its physical memory to a given host $B$. The hypervisor will issue a ticket which can be used by the $A$ to map the physical memory from $A$ into its own address space.
+In the normal Xen model, each virtual host have its own memory address space which are mapped to non-overlapping physical memory, providing the usual abstraction of total ownership of the memory space to each host. Nevertheless, the Xen hypervisor can also remap some host's memory into the address space of another host. In order to do so, an host $A$ must ask the hypervisor to grant the right to use a given part of its physical memory to a given host $B$. The hypervisor will issue a ticket which can be used by $B$ to map the physical memory from $A$ into its own address space.
 
 The implementation of this protocol can be considered as a potential security breach: from our experiments, we tend to believe that the entropy of the domain id (16 bits) and the ticket (32 bits) is really small (and the tickets seems to be simply increasing). Thus an attacker that obtained access to one of the two hosts, as long as it have access to the userspace tools to map the memory, could also, by guessing or brute-forcing those ids, map the same physical memory and thus spy or modify the data. Such a security problem doesn't come from our system but from Xen, thus we believe that it will be fixed in the near future.
 
@@ -101,11 +104,13 @@ Another restriction of this model concerns hot migration of hosts. If a group of
 
 \subsection{Create shared memory}
 
-In order to share some memory, the memory first needs to be allocated in one of the two hosts, that we will call the \emph{offerer}\footnote{This will have implications for the clean termination and memory freeing, as explained later, see section \ref{Termination}.}. When an host do so, it allocates different things, some pages in the real\footnote{In that case, what he believes real, which is protected by Xen.} physical memory and some address space that will be mapped to it. As grants are given on an host to host basis, the \emph{offerer} needs to know the domain id of the other host which will be called the \emph{receiver}. The exact specification of such exchanges of information, using standard communication paths, is outside the scope of our project\footnote{Reader are invited to look at the simple protocol using UDP that we created for that purpose during our test}. Then, by using an \emph{Hypercall}, the \emph{offerer} can ask the hypervisor to grant the right to map. The hypervisor will store the pseudo-physical address that correspond to the grant, together with the domain id of both the \emph{offerer} and the \emph{receiver} and also a ticket number.
+In order to share some memory, the memory first needs to be allocated in one of the two hosts, that we will call the \emph{offerer}\footnote{This will have implications for the clean termination and memory freeing, as explained later, see section \ref{Termination}.}. When an host do so, it allocates different things, some pages in the real\footnote{In that case, what he believes real, which is protected by Xen.} physical memory and some address space that will be mapped to it. As grants are given on an host to host basis, the \emph{offerer} needs to know the domain id of the other host which will be called the \emph{receiver}. The exact specification of such exchanges of information, using standard communication paths, is outside the scope of our project\footnote{Reader are invited to look at the simple protocol using UDP that we created for that purpose during our test}. Then, by using an \emph{Hypercall}, the \emph{offerer} can ask the hypervisor to grant the right to map. The hypervisor will store the pseudo-physical address that corresponds to the grant, together with the domain id of both the \emph{offerer} and the \emph{receiver} and also a ticket number.
 
 With both the \emph{offerer's} domain id and the grant ticket number, the \emph{receiver} can make another \emph{Hypercall} with some references of its own address space: the hypervisor will take care of modifying the memory mapping between the two spaces. Mapping in the kernel space is easy, as we fully control what happens. Mapping in the user space, a separate domain with a lot of automatic events, is harder as we will explain in the next section.
 
 In fact, we are not using directly the Hypercalls. Those are pretty stable but needs work to be done around them depending on the hardware, the kernel/Xen versions and so on. Recent Linux kernels provide an API to abstract all of this, but this API have recurrent small changes\footnote{For example the function \emph{gnttab\_unmap\_refs} is different between the three kernel we used.} as more functionalities are added. Even if this API is currently more volatile, we still believe that using it will provide a better long-term stability.
+
+%Should talk about header page ?
 
 \subsection{Map memory into user-space}
 \label{userspace}
@@ -118,7 +123,15 @@ On the other side, the \emph{receiver} one, things are more complicated. At firs
 
 \subsection{Event channel}
 
+Shared memory is essential to provide any communication system, but when it comes to make it more efficient, it is not enough anymore. Indeed, when there is no data available, the \emph{reader} must wait for it. Also, when there is no more space, the \empÌ{writer} has sometime to wait. On a single host, the kernel is usually responsible of making the processes wait and waking them up when needed. Also, \emph{mutexes} are used in user space in order to synchronize different processes, but even though we have shared memory. But those solutions simply doesn't work when different kernels are using shared objects.
 
+Therefore our device, in addition to shared memory, uses an event channel in order to provide \emph{wait} and \emph{notify} operations. An event channel is a bidirectional pipe able to send and handle virtual interrupts, through Xen's hypercalls. Creating an event channel is very similar to sharing memory. The \emph{offerer} opens an event channel, identified by its port number, while the \emph{receiver} uses the port number with the distant domain id in order to connect with it. When some \emph{offerer} process initialize its own side, the port number is written in the header shared page so that it can be read by the \emph{receiver} and the channel established. 
+
+Even though an event channel only transmit one bit of information, the user space interface, using \emph{ioctls}, provides different features. Indeed, upon connexion of the event channel, a very first signal is sent to notify the \emph{receiver} that some process successfully connected to the other end. This signal is acknowledged so that both ends know that the other process is ready. This mechanism allows the user to wait for initialization, which should be used instead of the \emph{accept} call of TCP sockets.
+
+Then, there exists two different way to wait for other user's signals. The first and most obvious consists in waiting for a signal which is received while the process is waiting. Which means that the process will only be waken up by the kernel if some received signal is considered after the kernel put the process in the waiting queue.  But this way to wait, because of synchronization issues, can be unsafe. Therefore, a feature consists in waiting for a signal that could have been received before the process was put in the queue, but which did not woke up any process. The triggering signal could be outdated, but this feature prevents possible deadlocks. 
+
+Those three different kind of signals can be used together with two other features. The first is a very classic \emph{timeout} feature, which allows the process to wake-up after some time\footnote{Specified in ms but only performs with jiffies precision} if no signal have been received. The second feature consists in returning immediately if the other process is already waiting. It uses atomic operations on a shared integer, but its correctness only relies on kernel's and hardware's atomic operations correctness. Therefore, although it significantly reduces the probability of a deadlock to happen, we preferred not using it in the pipe implementation.
 
 \subsection{Termination}
 \label{Termination}
