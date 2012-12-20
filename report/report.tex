@@ -195,6 +195,12 @@ The final tests were run using Xen 4.2.1 on top of Linux 3.5.7. We used the Gent
 
 \subsection{Delays}
 
+Another area where our solution is supposed to increase the performances is the delay between the emission and the reception between the two VMs. For the references, we used two domains, each with there own CPU and let them exchange ICMP query/reply. The mean of the Round Trip Time (RTT) was about $114 \mu s$. An interesting point here was that the very first first ICMP exchange (of series) always took more than three times the mean (We excluded it from the mean calculus). It tends to indicate that even ICMP need to take time to initialize itself, thus, even if we didn't measured the initialization time of our solution (exchanging information and sharing memory), should not be that worse than standard TCP handshakes (plus the time needed to initiate the routes as even ICMP need time to do so).
+
+We did two different kind of measurements that tries to reproduce pings, a \emph{ping} flood and isolated \emph{pings}. In both cases, after the initialization, one host writes in one pipe a predetermined amount of data (small as we don't want bandwidth to have an impact), the other reads in the same pipe the same fix amount and write it back in an other pipe that is read by the first host. This simple system allows up to measure the time needed to exchange information, a virtual RTT. The results outperform ICMP exchanges: in isolated pings, the RTT was about $41 \mu s$ and in ping flood it was down to $24 \mu s$, less than a fourth of ICMP one !
+
+It is clear that in the case of the ping flood, it is our optimization that reduce the number of wait that allows such good performances, which means that we have an interesting trade-off between response time and length of active wait. In the case of the isolated pings, even if the process is waiting and an interrupts is used to notify it, we are still twice faster than the IP-based solution.
+
 \subsection{Simultaneous transfers}
 
 \input{plots/simult_flows}
