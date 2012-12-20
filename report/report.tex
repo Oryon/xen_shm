@@ -1,46 +1,26 @@
 \documentclass[journal]{IEEEtran}
 
-  \usepackage{tikz}
-  \usetikzlibrary{shapes.multipart}  
+\usepackage{tikz}
+\usetikzlibrary{shapes.multipart}  
+\include{plots/plots_headers}
   
-  \include{plots/plots_headers}
-  
-
 \begin{document}
 
 \title{Project report}
 
 \author{Vincent B\textsc{rillault} \& Pierre P\textsc{fister}}% <-this % stops a space
 
-
-\markboth{Advanced Computer Networks and Distributed Systems 2012}%
-{Shell \MakeLowercase{\textit{et al.}}: Bare Demo of IEEEtran.cls for Journals}
+\markboth{Advanced Computer Networks and Distributed Systems 2012}{}
 \maketitle
 
-
-
-
-
 \begin{abstract}
-\boldmath
-%The abstract goes here.
+
+
+
+
+
+
 \end{abstract}
-%% IEEEtran.cls defaults to using nonbold math in the Abstract.
-%% This preserves the distinction between vectors and scalars. However,
-%% if the journal you are submitting to favors bold math in the abstract,
-%% then you can use LaTeX's standard command \boldmath at the very start
-%% of the abstract to achieve this. Many IEEE journals frown on math
-%% in the abstract anyway.
-%
-%% Note that keywords are not normally used for peerreview papers.
-%\begin{IEEEkeywords}
-%IEEEtran, journal, \LaTeX, paper, template.
-%\end{IEEEkeywords}
-
-
-
-
-
 
 \section{Introduction}
 
@@ -114,10 +94,9 @@ Those values then need to be shared so that the other process can call appropria
 
 In our implementation, each shared page uses its own grant reference (ticket). In order to reduce the size of the information that needs to be shared, the first page is used as an header page. This page contains all the needed grant references, event channel information, and the state of both ends (they are correctly maintained as long as no kernel crashes). Therefore, the first page the user can map is only the second shared page. 
 
-
-
 \subsection{Map memory into user-space}
 \label{userspace}
+
 As this implementation tries to limit the kernel involvement, it maps directly the shared memory into the userspace, allowing direct read/write accesses without any overhead.
 
 On the \emph{offerer} side, the mapping is easy as the kernel already prepare all the work for device drivers: when standard device driver functions are called (open, nmap, munmap, close), the kernel automatically prepare or clean the memory. Furthermore, a function, \emph{remap\_pfn\_range}, exists for simple remapping, making this remapping a child problem.
@@ -125,7 +104,6 @@ On the \emph{offerer} side, the mapping is easy as the kernel already prepare al
 On the other side, the \emph{receiver} one, things are more complicated. At first sight, one can simply call the xen API with the user space address. It will somehow work, that is it will map the physical memory and grant the access as we want, but it won't last long as it will taint the kernel with page errors during the unmapping.
 The correct approach is to work on a lower lever, page tables, and to correctly invalidate the mapping on an early stage of the memory unmapping\footnote{Dedicated MMU Notifier Operation are registered in the memory management system in order to do so.}.
 This part of our work is inspired by the Linux \emph{gntdev} driver that allows to map memory into user space (But without all the automatic exchanges nor the signals that we wanted). Even if our code was fully rewritten for simplicity purposes, maintainers and users are encouraged to monitor modifications of this part of the Kernel on each major update as it will be probably be maintained by Linux kernel or Xen developers as new functionalities kicks in.
-
 
 \subsection{Event channel}
 
@@ -168,8 +146,6 @@ Although we cannot be as transparent as existing solutions, our implementation w
 
 As it is a unidirectional channel, peers are called \emph{writer} and \emph{reader}. One pipe, using some shared memory instance, needs exactly one \emph{writer} and one \emph{reader}, but those roles have nothing to do with the underlying \emph{offerer} and \emph{referer} roles, which refer to the owner of the physical memory. Some peer can be wether the \emph{offerer} or the \emph{receiver}, as long as they use the same convention. Nevertheless, note that it is best practice to make the \emph{reader} to be the \emph{offerer}. Indeed, during a graceful transfer, the \emph{writer} usually decides when we wants to stop transmitting, and it is better to close the \emph{receiver} before the \emph{offerer} so that every shared entry can be immediately ungranted (otherwise it has to be put in the 'close later' queue).
 
-
-
 \subsection{Optimizations}
 
 Circular buffers are very simple structures, but optimizing them can be tricky. The first, and obvious, optimization consists in copying words instead of bytes. As our evaluation systems use 64bits processors, we optimized the copying to be done on 64bits aligned words. Therefore, it is best-practice to use 64bits aligned buffers when performing read and write operations. 
@@ -183,7 +159,6 @@ Then, we also want to avoid unnecessary \emph{wait} calls. An obvious way to do 
 As a solution , we use the \emph{active} flag in order to tell the other process wether we are currently doing something or not.
 If set, the other process will wait actively (loop) instead of calling the \emph{wait} ioctl (and so the other process will not call \emph{notify}). Nevertheless, when a lot of processes are running, a process can be unscheduled, and the other process can loop for nothing. Therefore, there is a limitation to the number of consecutive loops after which the process will try to sleep. This limit is empirical and the optimal value depends on the number of processes. A large value is optimized for a few processes running at the same time while a smaller value will allows the channel to bear more frequent unscheduling.  
 
-
 \subsection{Dead-lock avoidance}
 
 Of course, a process must be extremely careful before putting itself into sleep, or even while looping, because the other process could wether be waiting, or even crashed. That's why we use another flag, \emph{waiting}, that a process sets whenever we starts waiting for data/space\footnote{The wait can be active (looping) or passive (sleeping)}, and unsets it at the end. The key idea, of course, is to forbid sleeping when the other process set this flag\footnote{An important point for efficiency is to notice that there is wether space or data available, so even if both processes can wait at the same time, it can't be the case for very long}, which implies a weak form of consensus.
@@ -192,7 +167,6 @@ This ensures that the other process could not have entered the waiting loop befo
 
 As we said earlier, a process doesn't always sends a signal after an operation, even though the other process is going to wait for it (there is a race condition). This is not a problem as long as both processes continue writing and reading, because everything is done to wake up sleeping processes. But, if some process wants do to something else, nothing ensures the other process will be able to full/empty the buffer completely. Therefore, we provide the user the \emph{flush} function, which will simply sends a signal through the event channel. Because of the way we wait for signals\footnote{A signal, if not immediately handled, wakes up any future waiting process}, sending such a signal ensures all the data/space that was available before the user called \emph{flush} to be correctly handled by the other process. 
 
-
 \subsection{Closing the pipe}
 
 Whenever a process closes the pipe, it sets the closed flag, so that the other peer can know it. When it's set, any \emph{write} will fail and \emph{read} will return end of file as soon as there is no more available data.  
@@ -200,7 +174,6 @@ Whenever a process closes the pipe, it sets the closed flag, so that the other p
 But we still have a problem if some process crashes. When it occurs, the kernel will close the device file, modify the shared state, and send a signal, so that any waiting process will receive the \emph{EPIPE} error. But in some previously described cases, a process is prevented from sleeping (active loop). So each process that makes more than a fixed number loop must check if the channel is still open. It is done by waiting for the initialization signal, so that it wether returns 0 or \emph{EPIPE}. 
 
 Those mechanisms, put together, offer graceful termination and prevent dead-locks. Nevertheless, processes can loop when the other kernel crashes. The event channel could be used to send regular keep-alive, but we did not have the time to implement it.  
-
 
 \section{Evaluation}
 
@@ -214,6 +187,7 @@ With the recent improvements of caches, sharing mechanisms inside CPUs and memor
 The final tests were run using Xen 4.2.1 on top of Linux 3.5.7. We used the Gentoo Linux distribution for both the dom0 and the domUs. We also pinned the CPUs: dom0 always had 2 CPUs and 2GB of memory. Depending on the tests, either we used two hosts with 1 CPU and 1GB of memory each, either we used only one other host with 2 CPUs and still 1GB of memory. We allocated a lot of memory to each hosts but almost none of it was used by our system that only allocate one shared buffer.
 
 \subsection{Throughput}
+
 
 \input{plots/shm_size}
 
@@ -248,53 +222,6 @@ As a second future work axe, we think the unscheduling detection could be improv
 
 Finally, as a third point of improvement, the API would need some revisions. First, the transfer convention (writer offerer or writer receiver) and mod (write or read) shouldn't have to be specified at the initialization of a pipe. Indeed, it reduces the possibility of agreements that could be made by the upper IP protocol. Then, a bootstrap mechanism should be developed in order to provide a bidirectional pipe by only providing a file descriptor (typically a TCP connexion between the two hosts). Ideally, a mechanism should allow the peers to know if they are on the same physical machine or not.
 
-
-
- 
-% if have a single appendix:
-%\appendix[Proof of the Zonklar Equations]
-% or
-%\appendix  % for no appendix heading
-% do not use \section anymore after \appendix, only \section*
-% is possibly needed
-
-% use appendices with more than one appendix
-% then use \section to start each appendix
-% you must declare a \section before using any
-% \subsection or using \label (\appendices by itself
-% starts a section numbered zero.)
-%
-
-
-%\appendices
-%\section{Figures}
-%Appendix one text goes here.
-
-
-
-
-% you can choose not to have a title for an appendix
-% if you want by leaving the argument blank
-
-%Appendix two text goes here.
-
-
-% use section* for acknowledgement
-%\section*{Acknowledgment}
-%
-%
-%The authors would like to thank...
-
-
-
-% Can use something like this to put references on a page
-% by themselves when using endfloat and the captionsoff option.
-\ifCLASSOPTIONcaptionsoff
-  \newpage
-\fi
-
-
-
 \begin{thebibliography}{1}
 
 \bibitem{XenSocket}
@@ -310,10 +237,6 @@ Jian Wang et al., \emph{XenLoop : A Transparent High Performance Inter-VM Networ
 Derek G. Murray, Grzegorz Milos and Steven Hand, \emph{Improving Xen Security through Disaggregation}, VEE '08.
 
 \end{thebibliography}
-
-
-
-
 
 % that's all folks
 \end{document}
