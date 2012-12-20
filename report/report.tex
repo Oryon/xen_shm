@@ -1,10 +1,5 @@
 \documentclass[journal]{IEEEtran}
 
-  \usepackage{graphicx}
-  \usepackage{fixltx2e}
-  \usepackage{stfloats}
-  \usepackage{listings}
-
   \usepackage{tikz}
   \usetikzlibrary{shapes.multipart}  
   
@@ -75,7 +70,6 @@ The Xen's \emph{grant table} feature offers an interface for different \emph{dom
 As the Xen's \emph{grant table} interface changes a lot, most of those implementations would need modifications in order to compile (they are not maintained). Actually, the only well maintained driver we found is \emph{gntdev}. It enables shared memory mapping into the user space, but doesn't provide any communication interface. 
 We didn't chose to not use this device, but its source code helped us in achieving mapping of shared memory into the user space. 
 
-
 \subsection{Our work}
 
 Those solutions are pretty efficient and very user friendly, letting no much more space for improvement, but all of them, as the user space cannot directly access the shared memory, require system calls (and thus context switching) in order to achieve read and write operations.
@@ -90,9 +84,6 @@ The second layer of our solution, a user space library on top of the kernel shar
 
 In the second and third parts of this report, we detail the functioning of those two different elements. Then, in the fourth part, we present the performances of our solution. 
 
-
-
-
 \section{Shared memory device}
 
 The first realisation of our project is a Linux kernel module which defines a new device driver\footnote{Its current name is xen\_shm}.
@@ -106,7 +97,7 @@ In the normal Xen model, each virtual host have its own memory address space whi
 
 The implementation of this protocol can be considered as a potential security breach: from our experiments, we tend to believe that the entropy of the domain id (16 bits) and the ticket (32 bits) is really small (and the tickets seems to be simply increasing). Thus an attacker that obtained access to one of the two hosts, as long as it have access to the userspace tools to map the memory, could also, by guessing or brute-forcing those ids, map the same physical memory and thus spy or modify the data. Such a security problem doesn't come from our system but from Xen, thus we believe that it will be fixed in the near future.
 
-Another restriction of this model concerns hot migration of hosts. If a group of hosts shares two-by-two some memory then none of them can be migrated to another machine as it is not possible to share physical memory between two distant nodes (at least with the current technology). The current sharing mechanism and grant system doesn't provide a way to detect and prevent or cope with such migrations, thus our system will probably utterly crash if this occurs. If thus API are provided by Xen in the future, mechanisms that disable the channel could be implemented.
+Another restriction of this model concerns hot migration of hosts. If a group of hosts shares two-by-two some memory then none of them can be migrated to another machine as it is not possible to share physical memory between two distant nodes (at least with the current technology). The current sharing mechanism and grant system doesn't provide a way to detect and prevent or cope with such migrations, thus our system will probably utterly crash if this occurs. If such an API is provided by Xen in the future, mechanisms that disable the channel could be implemented.
 
 \subsection{Create shared memory}
 
