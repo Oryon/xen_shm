@@ -156,7 +156,7 @@ First, to reduce the number of \emph{notify} calls, the \emph{sleeping} flag is 
 On the other hand, a process sets this flag just before calling the \emph{wait ioctl}, and unsets it after wake up. Of course, this creates a race condition, but we explain how this problem was solved in the next section.
 
 Then, we also want to avoid unnecessary \emph{wait} calls. An obvious way to do it would be to loop until data/space is available, and it would work, as long as the process is alone on the machine. Otherwise, the kernel scheduler would unschedule the process, which would significantly reduce the performances. Overmore, it wouldn't be resources efficient.
-As a solution , we use the \emph{active} flag in order to tell the other process wether we are currently doing something or not.
+As a solution, we use the \emph{active} flag in order to tell the other process wether we are currently doing something or not.
 If set, the other process will wait actively (loop) instead of calling the \emph{wait} ioctl (and so the other process will not call \emph{notify}). Nevertheless, when a lot of processes are running, a process can be unscheduled, and the other process can loop for nothing. Therefore, there is a limitation to the number of consecutive loops after which the process will try to sleep. This limit is empirical and the optimal value depends on the number of processes. A large value is optimized for a few processes running at the same time while a smaller value will allows the channel to bear more frequent unscheduling.  
 
 \subsection{Dead-lock avoidance}
