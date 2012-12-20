@@ -241,6 +241,11 @@ The final tests were run using Xen 4.2.1 on top of Linux 3.5.7. We used the Gent
 
 \subsection{Contributions}
 
+In this report, we presented Xen Pipe, an optimized communication channel that uses Xen's memory sharing mechanisms. In contrast to the existing solutions, it moves most of the operations at the user level and thus approaches optimal throughputs (limited by memory speed). Our work was divided into two main parts.
+
+The first contribution consists in the shared memory device, which offers a way to share memory between two \emph{user} processes on possibly different domains, and implements connexion-aware features. It is not only the first time a kernel device driver joins those two features but, because of the evolution of Xen's interface, our source code can be used as a reference for memory granting and mapping for recent Xen's versions.
+
+As a second contribution, our work focused on the way shared memory can be used as an optimized channel medium, focusing on the idea that only a few system calls are absolutely necessary when transmitting data. Different optimization ideas were introduced and the results are impressive. While resources efficient, our solution offers better throughput than any other existing solutions. As a trade-off, the user must be aware of some peculiarities, but future work could offers a more user friendly API, needing only a few modifications at the application layer.
 
 \subsection{Possible improvements}
 
