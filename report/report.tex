@@ -154,7 +154,7 @@ Both sides kernels also maintained a shared state field, inside the header page,
 
 In section \ref{xen_shared_memory}, we stated the possibility for a third party, on the receiver's domain, to access the shared memory by brute forcing the domain id and the grant reference. This design flow weakens our protocol's security, but also Xen's security itself. Indeed, as both grant reference and domain id suffer from a serious lack of entropy, it becomes possible for two virtual machines to establish a communication channel, even though the \emph{dom0} forbids them any form of communication. For instance, if an attacker could access \emph{/dev/gntdev}, it could use it to transfer data to another domain owned by the attacker, bypassing all IP protections. 
 
-Xen's administrators should be aware of this flows and Xen's developers should patch the hypervisor in order to increase variables entropy and give the \emph{dom0} the possibility to control which virtual machine could share memory with which other virtual machine.
+Xen's administrators should be aware of this flows. But as this grant table feature is not fully mature\footnote{Recurrent modifications of the Linux API}, we hope that Xen's developers will fix that missing entropy and perhaps implement a better access control on grant tables like, for example, a system where dom0 would be able to white list couples of domains that can share memory between them.
 
 \section{Shared memory based circular buffer}
 
