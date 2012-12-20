@@ -100,6 +100,7 @@ According to the end-to-end principle, it's a really dumb module that just gives
 As the Linux kernel, and more precisely its Xen parts, always change, our module is only guaranteed to work on Linux kernel version 3.2.32 (Debian testing), 3.4.9 and 3.5.4 (Gentoo Linux stable).
 
 \subsection{Xen shared memory}
+\label{xen_shared_memory}
 
 In the normal Xen model, each virtual host have its own memory address space which are mapped to non-overlapping physical memory, providing the usual abstraction of total ownership of the memory space to each host. Nevertheless, the Xen hypervisor can also remap some host's memory into the address space of another host. In order to do so, an host $A$ must ask the hypervisor to grant the right to use a given part of its physical memory to a given host $B$. The hypervisor will issue a ticket, called grant reference, which can be used by $B$ to map the physical memory from $A$ into its own address space.
 
@@ -158,6 +159,11 @@ The Xen API provides methods to detect the number of active mappings per grant. 
 
 Both sides kernels also maintained a shared state field, inside the header page, which indicates wether the end user is using the opened instance or not. Those fields are monitored so that any waiting process immediately returns with \emph{EPIPE} error if the other end state becomes closed. As the kernel monitors and close files when some process crashes, this ensures broken pipe detection as long as no kernel panic occurs.
 
+\subsection{Security considerations}
+
+In section \ref{xen_shared_memory}, we stated the possibility for a third party, on the receiver's domain, to access the shared memory by brute forcing the domain id and the grant reference. This design flow weakens our protocol's security, but also Xen's security itself. Indeed, as both grant reference and domain id suffer from a serious lack of entropy, it becomes possible for two virtual machines to establish a communication channel, even though the \emph{dom0} forbids them any form of communication. For instance, if an attacker could access \emph{/dev/gntdev}, it could use it to transfer data to another domain owned by the attacker, bypassing all IP protections. 
+
+Xen's administrators should be aware of this flows and Xen's developers should patch the hypervisor in order to increase variables entropy and give the \emph{dom0} the possibility to control which virtual machine could share memory with which other virtual machine.
 
 \section{Shared memory based circular buffer}
 
