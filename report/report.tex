@@ -187,7 +187,7 @@ With the recent improvements of caches, sharing mechanisms inside CPUs and memor
 The final tests were run using Xen 4.2.1 on top of Linux 3.5.7. We used the Gentoo Linux distribution for both the dom0 and the domUs. We also pinned the CPUs: dom0 always had 2 CPUs and 2GB of memory. Depending on the tests, either we used two hosts with 1 CPU and 1GB of memory each, either we used only one other host with 2 CPUs and still 1GB of memory. We allocated a lot of memory to each hosts but almost none of it was used by our system that only allocate one shared buffer.
 
 \subsection{Throughput}
-
+\label{section:throughput}
 
 \input{plots/shm_size}
 
@@ -203,10 +203,11 @@ It is clear that in the case of the ping flood, it is our optimization that redu
 
 \subsection{Simultaneous transfers}
 
+As we saw in section \ref{section:throughput}, our performances probably depends on the utilization of the cache by other programs or threads. An interesting comparison is then the impact of simultaneous transfers: do they disturb each other or not ? In order to check this question, we fixed two CPUs on dom0 and two CPUs on a domU and measured the throughput of processes flooding their channel, varying the number of processes in each measurement. The aggregated results are shown in figure \ref{simult_flows}.
+
 \input{plots/simult_flows}
 
-
-
+For up to 10 processes, the sharing is perfect and, in some cases achieve more global throughput that the one process case. For bigger numbers of processes, the sharing is less good than before with more dispersion and lower total throughput, even if the total throughput only decrease by a factor of two to three in the worse case. We think that in that case the major problem was the scheduling on two cores of a high number of concurrent processes creating a lot of context switching. It is possible that by changing the length of our active wait we could have achieved better total throughput with less dispersion, but we didn't have the time to do a full analysis.
 
 \section{Conclusion}
 
