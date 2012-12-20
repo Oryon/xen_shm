@@ -244,9 +244,13 @@ The final tests were run using Xen 4.2.1 on top of Linux 3.5.7. We used the Gent
 
 \subsection{Possible improvements}
 
+Although our solution is running, it is quite far from ready for production. First of all, it can only run on a few kernel and Xen versions, the use of shared structures could induce serious endianness problems, and a deeper debugging should be done. Also in a more practical point of view, we see at least three axes of possible improvements.
 
+First, we didn't implement any security mechanisms. The memory sharing mechanisms should prevent multiple domains to map the same shared area. This could be done, for instance, by ungranting the memory area access as soon as the initizaliation signal is received, ensuring that only one mapping is done, and finally identifying the receiver. Doing so, no third process could interfere, and no man-in-the-middle attack would be possible as long as the bootstrapping mechanism is secured. 
 
+As a second future work axe, we think the unscheduling detection could be improved. Indeed, by now, when a process is unscheduled while writing or reading data, the other process loops a certain constant number of iterations, waiting for data or space, before assuming the other process was unscheduled, and then, go to sleep. The ideal number of iterations depends on processors speed and the regularity with which cursors are moved by peers (they are moved by steps, not continuously). Those steps should be variable and depend on the regularity of detected unscheduling. The idea is to approach unscheduling detection as TCP adapts to packet losses. 
 
+Finally, as a third point of improvement, the API would need some revisions. First, the transfer convention (writer offerer or writer receiver) and mod (write or read) shouldn't have to be specified at the initialization of a pipe. Indeed, it reduces the possibility of agreements that could be made by the upper IP protocol. Then, a bootstrap mechanism should be developed in order to provide a bidirectional pipe by only providing a file descriptor (typically a TCP connexion between the two hosts). Ideally, a mechanism should allow the peers to know if they are on the same physical machine or not.
 
 
 
