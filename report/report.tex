@@ -37,10 +37,12 @@ Between two applications, a message passing through the network stack will need 
 Going through all those different parts results in successive copies of the same packet in different memories, thus cost a lot.
 Furthermore as network interface uses interruptions to indicate new packets, going through the network stack generates a lot of kernel context switches.
 
-\input{xen_normal_architecture}
+
 
 Xen offers a way to directly share memory between hosts.
 Using such dedicated memory should allow to create channels between virtual hosts with only a few data copies and little to no kernel involvement.
+
+\input{xen_normal_architecture}
 
 \subsection{Related work}
 
