@@ -16,9 +16,7 @@
 
 \begin{abstract}
 
-
-
-
+Virtualization has been, during the last ten years, one of the hottest topic in computer science, allowing almost lossless performances sharing between virtual machines. Nevertheless, higher level interactions between virtualized domains don't fully take advantage of possible hardware proximity. In networking, for instance, the only difference between internal and external communications reside in whether a packet leaves the kernel or not. Thus, some solutions were proposed in order to bypass lower level kernel's network layers. But as they all reside in the kernel space, they still need context switches. In this report, we present Xen Pipe, an optimized communication channel implementation for Xen's virtual machines. The key idea consists in mapping pages of shared memory directly into userspaces, and thus getting rid of useless system calls. As in this particular multi-kernel context, usual inter-process communications techniques cannot be used, we introduce new optimization techniques that allows Xen Pipe to achieve better throughput and delays than any existing state-of-the-art solutions by reducing memory access overhead to its minimum. 
 
 
 \end{abstract}
