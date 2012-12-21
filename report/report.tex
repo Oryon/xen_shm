@@ -189,9 +189,17 @@ The final tests were run using Xen 4.2.1 on top of Linux 3.5.7. We used the Gent
 \subsection{Throughput}
 \label{section:throughput}
 
+
+
+The first thing we tested was the throughput, as shown in figure \ref{shm_size}. We used \emph{iperf} to evaluate the domU to domU throughput for a fixed packet size but different window size, then we compared to our solution, using the same amount of memory that was used for the tcp window for our shared memory. As expected we outperform the tcp throughput by a factor of at least 5.
+
 \input{plots/shm_size}
 
+As no other process were running at the same time, the test was a bit unfair: as the processor cache was not used by anyone else, the shared memory was fully contained in it and it was never invalidated by some concurrent process\footnote{We only used 2 processes as the domain add 2 CPUs, in order to have no scheduling concurrence.}. In order to be fair, we made the same test under some pressure. An other process was writing as fast as it can into an address space larger than the buffer size, thus invalidating as fast as possible all cache entries. The result are interesting: when you use only a few pages, the other process has only a small impact. We think it's because the probability of having our few pages invalidated among all the cache entries is small. Then, when you add more pages, at some point you loose throughput, also probably because you increase the collision probability.
+
 \input{plots/msg_size}
+
+Then we compared different message size and different shared memory size as shown in figure \ref{msg_size}. For small message size, as long as the shared memory size is bigger than the message size, performances are the same, but as soon as messages cannot fit in one piece in the memory the throughput is degraded. We currently have no explanation for the irregularity that present the curve with 60 pages and this over-performance need to be studied more. This figure also include curves for other existing solutions. As we weren't able to compile and run them, the numbers come from their original papers. It is clear that our optimization improved the performances.
 
 \subsection{Delays}
 
