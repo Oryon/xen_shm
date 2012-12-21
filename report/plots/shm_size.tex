@@ -11,10 +11,10 @@
         ]
         
     \addplot table [ x index=0,y index=1] {plots/bandwidth.txt};
-    \addlegendentry{Xen pipe}
+    \addlegendentry{Xen Pipe}
     
     \addplot table[ x index=0,y index=3] {plots/bandwidth.txt};
-    \addlegendentry{Stressed Xen pipe}
+    \addlegendentry{Stressed Xen Pipe}
     
     \addplot table[ x index=0,y index=2] {plots/bandwidth.txt};
     \addlegendentry{TCP}
@@ -22,6 +22,6 @@
     
     \end{semilogxaxis}
 \end{tikzpicture}
-\caption{Comparison between Xen pipe and TCP throughputs for different buffer sizes}
+\caption{Comparison between Xen Pipe and TCP throughputs for different buffer sizes}
 \label{shm_size}
 \end{figure}
