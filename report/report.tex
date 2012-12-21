@@ -35,7 +35,7 @@ Our project consists in allowing two virtual machines running on a single Xen hy
 Between normal virtual hosts, the standard communication channels use the network stack.
 Between two applications, a message passing through the network stack will need to go into the local IP stack, travel from the host to \emph{dom0} through the virtual interface, be routed or switched back to the other host through the other virtual interface, follow the local IP stack and then arrive in the application.
 Going through all those different parts results in successive copies of the same packet in different memories, thus cost a lot.
-Furthermore as network interface use interruptions to indicate new packets, going through the network stack generate a lot of kernel context switch.
+Furthermore as network interface uses interruptions to indicate new packets, going through the network stack generates a lot of kernel context switches.
 
 \input{xen_normal_architecture}
 
