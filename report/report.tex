@@ -76,7 +76,7 @@ As the Linux kernel, and more precisely its Xen parts, always change, our module
 
 In the normal Xen model, each virtual host have its own memory address space which are mapped to non-overlapping physical memory, providing the usual abstraction of total ownership of the memory space to each host. Nevertheless, the Xen hypervisor can also remap some host's memory into the address space of another host. In order to do so, an host $A$ must ask the hypervisor to grant the right to use a given part of its physical memory to a given host $B$. The hypervisor will issue a ticket, called grant reference, which can be used by $B$ to map the physical memory from $A$ into its own address space.
 
-The implementation of this protocol can be considered as a potential security breach: from our experiments, we tend to believe that the entropy of the domain id (16 bits) and the ticket (32 bits) is really small (and the tickets seems to be simply increasing). Thus an attacker that obtained access to one of the two hosts, as long as it have access to a userspace tools to map the memory\footnote{Like the already existing \emph{gntdev}.}, could also, by guessing or brute-forcing those ids, map the same physical memory and thus spy or modify the data. Such a security problem doesn't come from our system but from Xen, thus we believe that it will be fixed in the near future.
+The implementation of this protocol can be considered as a potential security breach: from our experiments, we tend to believe that the entropy of the domain id (16 bits) and the ticket (32 bits) is really small (and the tickets seems to be simply increasing). Thus an attacker that obtained access to one of the two hosts, as long as it have access to a userspace tool to map the memory\footnote{Like the already existing \emph{gntdev}.}, could also, by guessing or brute-forcing those ids, map the same physical memory and thus spy or modify the data. Such a security problem doesn't come from our system but from Xen, thus we believe that it will be fixed in the near future.
 
 Another restriction of this model concerns hot migration of hosts. If a group of hosts shares two-by-two some memory then none of them can be migrated to another machine as it is not possible to share physical memory between two distant nodes (at least with the current technology). The current sharing mechanism and grant system doesn't provide a way to detect and prevent or cope with such migrations, thus our system will probably utterly crash if this occurs. If such an API is provided by Xen in the future, mechanisms that disable the channel could be implemented.
 
@@ -115,11 +115,9 @@ When the \emph{offerer} process initializes its own side, the port number is wri
 
 Even though an event channel only transmit one bit of information, the user space interface, using \emph{ioctls}, provides different features. Indeed, upon connection of the event channel, a very first signal is sent to notify the \emph{receiver} that some process successfully connected to the other end. This signal is acknowledged so that both ends know that the other process is ready. This mechanism allows the user to wait for initialization, which should be used as a replacement of the \emph{accept} call of TCP sockets.
 
-When a notify signal is sent, two different cases can occur.
-The simplest one occurs when the process is already waiting for such a signal and need is waken up by the kernel.
-The less intuitive one occurs when a signal is received but the process wasn't waiting for it:
-Race conditions can happen between the moment the waiting flags is set and the moment the kernel put the process in the waiting queue.
-Therefore, the process should be awaken if a signal was received beforehand but was not transmitted to any process. The triggering signal could be outdated, but this feature prevents possible deadlocks.
+Then, a process can wait for user's signals. One way consists in waiting for signals received during the wait time. But race condition can happen between the moment the waiting flag is set and the moment the kernel put the process in the waiting queue.
+Therefore, a process can also wait for previously received signals that did not woke up any process when it was received by the kernel.
+The triggering signal could be outdated, but this feature prevents possible deadlocks.
 
 These different kind of signals can be used together with two other features. The first is a very classic \emph{timeout} feature, which allows the process to wake-up after some time\footnote{Specified in ms but only performs with jiffies precision} if no signal have been received. The second feature consists in returning immediately if the other process is already waiting. It uses atomic operations on a shared integer, but its correctness only relies on kernel's and hardware's atomic operations correctness. Therefore, although it significantly reduces the probability of a deadlock to happen, we preferred not to use it in the pipe implementation, privileging higher layer solutions.
 
@@ -220,7 +218,7 @@ Another value that our solution is supposed to improve is the delay between the 
 
 We did two different kind of measurements in order to evaluate delays, a \emph{ping} flood and isolated \emph{pings}. In both cases, after the initialization, one host writes in one pipe a predetermined amount of data (small as we don't want bandwidth to have an impact), the other reads in the same pipe the same fix amount and write it back in another pipe that is read by the first host. This simple system allows us to measure the time needed to exchange information, a virtual RTT. The results outperform ICMP exchanges: in isolated pings, the RTT was about $41 \mu s$ and in ping flood it was down to $24 \mu s$, less than a fourth of ICMP delays !
 
-In the case of the ping flood, our optimization seems to reduce the number of wait improves performances, which would mean that we have an interesting trade-off between response time and length of active wait. In the case of the isolated pings, even if the process is waiting and an interrupts is used to notify it, we are still twice faster than the IP-based solution, as the number of memory copies, processing time and interrupts number are reduced.
+In the case of the ping flood, our optimization seems to reduce the number of wait and thus improves performances. A trade-off exists between the response time and the length of active wait. In the case of the isolated pings, even if the process is waiting and an interrupts is used to notify it, we are still more than twice as fast as the IP-based solution, as the number of memory copies, processing time and interrupts number are reduced.
 
 \subsection{Simultaneous transfers}
 
@@ -236,7 +234,7 @@ Also, as a part of our performances relies on simultaneous read and writes, unsc
 
 \subsection{Contributions}
 
-In this report, we presented Xen Pipe, an optimized communication channel that uses Xen's memory sharing mechanisms. In contrast to the existing solutions, it moves most of the operations into the user level and thus approaches optimal throughputs (limited by memory speed). Our work was divided into two main parts.
+In this report, we presented Xen Pipe, an optimized communication channel that uses Xen's memory sharing mechanisms. In contrast to the existing solutions, it moves most of the operations into the userspace and thus approaches optimal throughputs (limited by memory speed). Our work was divided into two main parts.
 
 The first contribution consists in the shared memory device, which offers a way to share memory between two \emph{user} processes on possibly different domains, and implements connection-aware features. It is not only the first time a kernel device driver joins those two features but, because of the evolution of Xen's interface, our source code can be used as a reference for memory granting and mapping for recent Xen's versions.
 
